@@ -1,0 +1,24 @@
+{
+  "short_name": "MH Nursalam",
+  "name": "Ponpes Mathlabul Hidayah Nursalam",
+  "description": "Sistem Informasi & Buku Saku Digital Wali Santri Ponpes Mathlabul Hidayah",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#14532d",
+  "theme_color": "#15803d",
+  "display": "standalone",
+  "orientation": "portrait"
+}

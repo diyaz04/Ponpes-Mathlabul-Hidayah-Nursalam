@@ -1,0 +1,6 @@
+{
+  "name": "Mathlabul Hidayah Nursalam",
+  "description": "Sistem Informasi & Dashboard Akademik Wali Santri Pondok Pesantren Mathlabul Hidayah Nursalam",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

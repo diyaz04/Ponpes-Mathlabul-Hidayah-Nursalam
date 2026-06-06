@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@405;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Custom Light Borders and Background Themes */
+  --color-gray-150: #f1f5f9;
+  --color-gray-202: #e2e8f0;
+  --color-gray-205: #cbd5e1;
+  --color-gray-250: #94a3b8;
+  --color-gray-505: #64748b;
+  --color-gray-750: #334155;
+  --color-gray-755: #1e293b;
+  --color-gray-850: #0f172a;
+
+  --color-slate-150: #f1f5f9;
+  --color-slate-202: #e2e8f0;
+  --color-slate-205: #cbd5e1;
+  --color-slate-250: #94a3b8;
+  --color-slate-850: #0f172a;
+
+  --color-green-150: #bbf7d0;
+  --color-emerald-150: #a7f3d0;
+  --color-teal-150: #99f6e4;
+  --color-indigo-150: #c7d2fe;
+  --color-red-150: #fecaca;
+
+  --color-indigo-750: #4338ca;
+  --color-indigo-805: #3730a3;
+  --color-indigo-850: #312e81;
+}
+
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: #f8fafc;
+    color: #1e293b;
+    scroll-behavior: smooth;
+  }
+}
+
+/* Scrollbar layout formatting */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-gray {
+  background: rgba(226, 232, 240, 0.5);
+  border-radius: 9px;
+}
+
+/* Printing styles for kuitansi digital */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #section-to-print, #section-to-print * {
+    visibility: visible;
+  }
+  #section-to-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none !important;
+    background: white;
+  }
+}
