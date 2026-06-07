@@ -462,6 +462,69 @@ app.post('/api/payment/create', async (req, res) => {
     }
 });
 
+// Create any account (admin/guru/user) — pakai admin SDK agar langsung aktif tanpa verifikasi email
+app.post('/api/admin/account/create', async (req, res) => {
+    try {
+        const { supabaseAdmin } = await verifyAdminRequest(req);
+        const { full_name, email, phone, password, role } = req.body || {};
+
+        if (!full_name || !email || !password) {
+            return res.status(400).json({ error: 'Nama, email, dan password wajib diisi.' });
+        }
+
+        const validRoles = ['admin', 'guru', 'user'];
+        const finalRole = validRoles.includes(role) ? role : 'user';
+        const normalizedEmail = String(email).trim().toLowerCase();
+
+        console.log(`[Admin Account Create] Creating ${finalRole}: ${normalizedEmail}`);
+
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email: normalizedEmail,
+            password: String(password),
+            email_confirm: true,
+            user_metadata: {
+                role: finalRole,
+                full_name,
+                phone: phone || ''
+            }
+        });
+
+        if (authError || !authData.user) {
+            return res.status(409).json({
+                error: authError?.message || 'Gagal membuat akun pengguna.'
+            });
+        }
+
+        const authUserId = authData.user.id;
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        // Upsert profile — trigger supabase mungkin sudah buat, tapi pastikan role benar
+        const { data: profile, error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .upsert({
+                user_id: authUserId,
+                role: finalRole,
+                full_name,
+                phone: phone || null,
+                email: normalizedEmail,
+                is_active: true
+            }, { onConflict: 'user_id' })
+            .select('*')
+            .single();
+
+        if (profileError) {
+            console.warn('[Admin Account Create] Profile upsert warning:', profileError.message);
+        }
+
+        console.log(`[Admin Account Create] Success: ${normalizedEmail} (${finalRole})`);
+        return res.json({ success: true, profile, auth_user_id: authUserId });
+    } catch (error: any) {
+        const statusCode = Number(error.statusCode || error.status || 500);
+        console.error('[Admin Account Create Error]', error);
+        return res.status(statusCode).json({ error: error.message || 'Gagal membuat akun.' });
+    }
+});
+
 // ✅ FIX 2: Webhook diubah jadi async handler yang proper
 // Bug lama: handler sync tapi pakai .then()/.catch() — bisa bikin race condition
 // dan response kadang ga kekirim sebelum Midtrans timeout
@@ -560,6 +623,50 @@ async function setupFrontend() {
         console.log(`[Server] running on http://0.0.0.0:${PORT}`);
         console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
         console.log(`[Server] Midtrans mode: ${process.env.MIDTRANS_IS_PRODUCTION === 'true' ? 'PRODUCTION' : 'SANDBOX'}`);
+
+        // Reset password wali + return password baru (untuk cetak ulang PDF biodata)
+app.post('/api/admin/account/reset-password', async (req, res) => {
+    try {
+        const { supabaseAdmin } = await verifyAdminRequest(req);
+        const { user_id, new_password } = req.body || {};
+
+        if (!user_id) {
+            return res.status(400).json({ error: 'user_id wajib diisi.' });
+        }
+
+        // Generate password baru jika tidak disuplai
+        const finalPassword = new_password || Math.random().toString(36).slice(2, 8).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+
+        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
+            password: String(finalPassword)
+        });
+
+        if (error || !data.user) {
+            return res.status(500).json({ error: error?.message || 'Gagal reset password.' });
+        }
+
+        console.log(`[Reset Password] user_id=${user_id} password baru di-set`);
+        return res.json({ success: true, new_password: finalPassword, user_id });
+    } catch (error: any) {
+        const statusCode = Number(error.statusCode || error.status || 500);
+        console.error('[Reset Password Error]', error);
+        return res.status(statusCode).json({ error: error.message || 'Gagal reset password.' });
+    }
+});
+
+        // KeepAlive: self-ping setiap 10 menit supaya Render free tier tidak sleep
+        const APP_URL = process.env.APP_URL || `https://ponpes-mathlabul-hidayah-nursalam.onrender.com`;
+        if (process.env.NODE_ENV === 'production') {
+            setInterval(async () => {
+                try {
+                    const res = await fetch(`${APP_URL}/api/health`);
+                    console.log(`[KeepAlive] Ping OK — ${new Date().toISOString()}`);
+                } catch (err: any) {
+                    console.warn(`[KeepAlive] Ping gagal: ${err.message}`);
+                }
+            }, 10 * 60 * 1000);
+            console.log(`[KeepAlive] Self-ping aktif setiap 10 menit ke ${APP_URL}/api/health`);
+        }
     });
 }
 

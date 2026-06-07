@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Edit, Save, Newspaper, Megaphone, HelpCircle, 
   DollarSign, Check, Activity, RefreshCw, Eye, Sparkles, UserCheck,
   AlertTriangle, Shield, CheckCircle2, Trash, X, Calendar, Lock, GraduationCap, Link, Phone, Mail, User,
-  Download, FileText, Search
+  Download, FileText, Search, Printer
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
@@ -188,6 +188,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     onConfirm: () => void;
   } | null>(null);
 
+  const [isPrintingAll, setIsPrintingAll] = useState(false);
+
   const triggerConfirm = (title: string, message: string, onConfirm: () => void) => {
     setConfirmModal({
       isOpen: true,
@@ -346,6 +348,118 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setPTahunMasuk('2026');
     }
     setShowPupilModal(true);
+  };
+
+  // ============================================================
+  // RESET PASSWORD + CETAK PDF BIODATA
+  // ============================================================
+  const resetAndPrintBiodata = async (santri: Santri) => {
+    const wali = profilesList.find(p => p.id === santri.wali_id);
+    if (!wali) {
+      setActionDoneMsg('⚠️ Santri ini belum memiliki data wali. Hubungkan wali terlebih dahulu.');
+      setTimeout(() => setActionDoneMsg(null), 4000);
+      return;
+    }
+    if (!wali.user_id) {
+      setActionDoneMsg('⚠️ Akun Supabase Auth wali belum ditemukan. Buat akun wali dulu.');
+      setTimeout(() => setActionDoneMsg(null), 4000);
+      return;
+    }
+
+    triggerConfirm(
+      'Reset Password & Cetak Biodata',
+      `Sistem akan mereset password akun wali "${wali.full_name}" ke password baru yang di-generate otomatis, lalu mencetak PDF biodata santri "${santri.nama}". Lanjutkan?`,
+      async () => {
+        try {
+          setActionDoneMsg('⏳ Mereset password & menyiapkan PDF...');
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData.session?.access_token || '';
+
+          const response = await fetch('/api/admin/account/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ user_id: wali.user_id })
+          });
+
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Gagal reset password.');
+
+          generateBiodataPDF(
+            { nis: santri.nis, nama: santri.nama, kelas: santri.kelas, kamar: santri.kamar,
+              jenis_kelamin: santri.jenis_kelamin, tanggal_lahir: santri.tanggal_lahir,
+              alamat: santri.alamat, tahun_masuk: santri.tahun_masuk, bulan_masuk: santri.bulan_masuk },
+            { full_name: wali.full_name, email: wali.email || '-', phone: wali.phone, password: result.new_password },
+            profilPP
+          );
+
+          setActionDoneMsg(`✅ Password direset & PDF biodata "${santri.nama}" berhasil dicetak!`);
+          setTimeout(() => setActionDoneMsg(null), 5000);
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal: ${err.message}`);
+          setTimeout(() => setActionDoneMsg(null), 5000);
+        }
+      }
+    );
+  };
+
+  const printAllBiodata = async () => {
+    const santriWithWali = santriList.filter(s => {
+      const wali = profilesList.find(p => p.id === s.wali_id);
+      return wali && wali.user_id;
+    });
+
+    if (santriWithWali.length === 0) {
+      setActionDoneMsg('⚠️ Tidak ada santri dengan akun wali yang terdaftar.');
+      setTimeout(() => setActionDoneMsg(null), 4000);
+      return;
+    }
+
+    triggerConfirm(
+      'Cetak Semua Biodata Santri',
+      `Sistem akan mereset password seluruh ${santriWithWali.length} akun wali ke password baru, lalu mencetak PDF biodata satu per satu. Proses ini tidak bisa dibatalkan. Lanjutkan?`,
+      async () => {
+        setIsPrintingAll(true);
+        setActionDoneMsg(`⏳ Memproses 0 / ${santriWithWali.length}...`);
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token || '';
+        let done = 0;
+        const errors: string[] = [];
+
+        for (const santri of santriWithWali) {
+          const wali = profilesList.find(p => p.id === santri.wali_id)!;
+          try {
+            const response = await fetch('/api/admin/account/reset-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ user_id: wali.user_id })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error);
+
+            // Delay kecil antar PDF supaya browser tidak nge-block download
+            await new Promise(r => setTimeout(r, 600));
+
+            generateBiodataPDF(
+              { nis: santri.nis, nama: santri.nama, kelas: santri.kelas, kamar: santri.kamar,
+                jenis_kelamin: santri.jenis_kelamin, tanggal_lahir: santri.tanggal_lahir,
+                alamat: santri.alamat, tahun_masuk: santri.tahun_masuk, bulan_masuk: santri.bulan_masuk },
+              { full_name: wali.full_name, email: wali.email || '-', phone: wali.phone, password: result.new_password },
+              profilPP
+            );
+            done++;
+            setActionDoneMsg(`⏳ Memproses ${done} / ${santriWithWali.length}...`);
+          } catch (err: any) {
+            errors.push(`${santri.nama}: ${err.message}`);
+          }
+        }
+
+        setIsPrintingAll(false);
+        const errMsg = errors.length > 0 ? ` | ⚠️ ${errors.length} gagal` : '';
+        setActionDoneMsg(`✅ Selesai! ${done} PDF biodata berhasil dicetak.${errMsg}`);
+        setTimeout(() => setActionDoneMsg(null), 8000);
+      }
+    );
   };
 
   // ============================================================
@@ -2186,6 +2300,14 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               >
                 <Plus className="w-4 h-4" /> Tambah Santri Baru
               </button>
+              <button
+                onClick={printAllBiodata}
+                disabled={isPrintingAll}
+                className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+              >
+                <Printer className="w-4 h-4" />
+                {isPrintingAll ? 'Mencetak...' : 'Cetak Semua PDF'}
+              </button>
             </div>
           </div>
 
@@ -2321,6 +2443,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     </td>
                     <td className="px-4 py-3 text-green-700">{getWaliName(s.wali_id)}</td>
                     <td className="px-4 py-3 text-right space-x-1">
+                      <button
+                        onClick={() => resetAndPrintBiodata(s)}
+                        title="Reset password wali & cetak PDF biodata"
+                        className="p-1 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg cursor-pointer inline-flex items-center gap-1 font-bold text-[10px]"
+                      >
+                        <Printer className="w-3.5 h-3.5" /> PDF
+                      </button>
                       <button 
                         onClick={() => handleOpenPupilModal(s)}
                         className="p-1 px-2.5 bg-slate-100 hover:bg-slate-200 text-gray-700 font-bold rounded-lg cursor-pointer"
