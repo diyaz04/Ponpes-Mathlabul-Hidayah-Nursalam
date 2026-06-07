@@ -474,23 +474,23 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     wali: { full_name: string; email: string; phone?: string; password: string },
     pesantren: { nama: string; alamat?: string; telepon?: string; email?: string } | null
   ) => {
-    // Load logo lalu generate PDF
-    const logoUrl = `${window.location.origin}/logo.svg`;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
+    // Generate QR Code dari link website menggunakan QR API
+    const siteUrl = window.location.origin;
+    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(siteUrl)}&bgcolor=ffffff&color=15803d&margin=4`;
+    const qrImg = new Image();
+    qrImg.crossOrigin = 'anonymous';
+    qrImg.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = 128; canvas.height = 128;
+      canvas.width = 200; canvas.height = 200;
       const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, 128, 128);
-      const logoBase64 = canvas.toDataURL('image/png');
-      _renderBiodataPDF(santri, wali, pesantren, logoBase64);
+      ctx.drawImage(qrImg, 0, 0, 200, 200);
+      const qrBase64 = canvas.toDataURL('image/png');
+      _renderBiodataPDF(santri, wali, pesantren, qrBase64);
     };
-    img.onerror = () => {
-      // Tetap generate PDF meski logo gagal load
+    qrImg.onerror = () => {
       _renderBiodataPDF(santri, wali, pesantren, null);
     };
-    img.src = logoUrl;
+    qrImg.src = qrApiUrl;
   };
 
   const _renderBiodataPDF = (
@@ -501,7 +501,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     },
     wali: { full_name: string; email: string; phone?: string; password: string },
     pesantren: { nama: string; alamat?: string; telepon?: string; email?: string } | null,
-    logoBase64: string | null
+    qrBase64: string | null
   ) => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210;
@@ -514,62 +514,60 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
     // ── HEADER BANNER ──────────────────────────────────────────
     doc.setFillColor(...GREEN_DARK);
-    doc.rect(0, 0, W, 44, 'F');
+    doc.rect(0, 0, W, 48, 'F');
 
     // Aksen garis bawah header
     doc.setFillColor(134, 239, 172);
-    doc.rect(0, 42, W, 2, 'F');
+    doc.rect(0, 46, W, 2, 'F');
 
-    // Logo
-    if (logoBase64) {
-      doc.addImage(logoBase64, 'PNG', 8, 5, 28, 28);
-    } else {
-      // Fallback: lingkaran dengan inisial
-      doc.setFillColor(...WHITE);
-      doc.circle(22, 19, 11, 'F');
-      doc.setFillColor(...GREEN_LIGHT);
-      doc.circle(22, 19, 9, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(...GREEN_DARK);
-      doc.text('MH', 22, 22, { align: 'center' });
-    }
-
-    // Nama & info pesantren
+    // Nama & info pesantren (kiri)
+    const namaPesantren = pesantren?.nama || 'Pondok Pesantren';
     doc.setTextColor(...WHITE);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
-    const namaPesantren = pesantren?.nama || 'Pondok Pesantren';
-    doc.text(namaPesantren, 42, 14);
+    doc.text(namaPesantren, 14, 14);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(187, 247, 208);
     if (pesantren?.alamat) {
-      doc.text(pesantren.alamat.substring(0, 65), 42, 21);
+      doc.text(pesantren.alamat.substring(0, 70), 14, 21);
     }
     if (pesantren?.telepon) {
       const kontakLine = `Telp: ${pesantren.telepon}${pesantren.email ? '  |  ' + pesantren.email : ''}`;
-      doc.text(kontakLine, 42, 27);
+      doc.text(kontakLine, 14, 27);
     }
 
-    // Badge kanan atas
+    // Badge KARTU BIODATA SANTRI
     doc.setFillColor(...GREEN_LIGHT);
-    doc.roundedRect(132, 6, 64, 11, 2, 2, 'F');
+    doc.roundedRect(14, 32, 80, 10, 2, 2, 'F');
     doc.setTextColor(...GREEN_DARK);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.text('KARTU BIODATA SANTRI', 164, 13.5, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text('KARTU BIODATA SANTRI', 54, 39, { align: 'center' });
+
+    // QR Code kanan header
+    if (qrBase64) {
+      // Background putih untuk QR
+      doc.setFillColor(...WHITE);
+      doc.roundedRect(163, 3, 40, 40, 2, 2, 'F');
+      doc.addImage(qrBase64, 'PNG', 165, 5, 36, 36);
+    }
+    // Label scan di bawah QR
+    doc.setTextColor(187, 247, 208);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.5);
+    doc.text('Scan untuk akses portal', 183, 45, { align: 'center' });
 
     // ── JUDUL DOKUMEN ──────────────────────────────────────────
     doc.setFillColor(...GREEN_PALE);
-    doc.rect(0, 44, W, 13, 'F');
+    doc.rect(0, 48, W, 13, 'F');
     doc.setTextColor(...GREEN_DARK);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text('BIODATA & AKUN PORTAL SANTRI', W / 2, 53, { align: 'center' });
+    doc.text('BIODATA & AKUN PORTAL SANTRI', W / 2, 57, { align: 'center' });
 
-    let y = 64;
+    let y = 68;
 
     const drawSectionTitle = (title: string, yPos: number) => {
       doc.setFillColor(...GREEN_DARK);
