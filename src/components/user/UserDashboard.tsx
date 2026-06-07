@@ -211,7 +211,7 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
     { name: 'Jun', Halaman: progress?.total_halaman || 15 }
   ];
 
-  const handleSaveWaliProfile = (e: React.FormEvent) => {
+  const handleSaveWaliProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     if (!profileName.trim() || !profileEmail.trim()) {
