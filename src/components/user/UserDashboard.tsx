@@ -281,9 +281,19 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
       return;
     }
 
-    // Update password in Supabase Auth if changed
-    if (finalPassword !== (user.password || '123456')) {
-      await supabase.auth.updateUser({ password: finalPassword }).catch(() => undefined);
+    // Update password di Supabase Auth + sync ke tabel profiles jika password berubah
+    if (oldPassword && newPassword && finalPassword === newPassword) {
+      const { error: authUpdateError } = await supabase.auth.updateUser({ password: finalPassword });
+      if (authUpdateError) {
+        setErrorMsg(`Gagal memperbarui kata sandi: ${authUpdateError.message}`);
+        setTimeout(() => setErrorMsg(null), 5000);
+        return;
+      }
+      // Sync password baru ke tabel profiles agar konsisten dengan Supabase Auth
+      await supabase
+        .from('profiles')
+        .update({ password: finalPassword })
+        .eq('id', user.id);
     }
 
     dbLocal.setProfiles(updatedProfiles);
