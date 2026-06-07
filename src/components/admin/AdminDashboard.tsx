@@ -189,6 +189,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   } | null>(null);
 
   const [isPrintingAll, setIsPrintingAll] = useState(false);
+  const [pdfChoiceModal, setPdfChoiceModal] = useState<{
+    isOpen: boolean;
+    santri: Santri;
+    wali: { id: string; user_id?: string; full_name: string; email?: string; phone?: string; password?: string };
+  } | null>(null);
 
   const triggerConfirm = (title: string, message: string, onConfirm: () => void) => {
     setConfirmModal({
@@ -351,7 +356,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   };
 
   // ============================================================
-  // RESET PASSWORD + CETAK PDF BIODATA
+  // CETAK PDF BIODATA — buka modal pilihan (hanya biodata / reset+biodata)
   // ============================================================
   const resetAndPrintBiodata = async (santri: Santri) => {
     const wali = profilesList.find(p => p.id === santri.wali_id);
@@ -365,41 +370,65 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setTimeout(() => setActionDoneMsg(null), 4000);
       return;
     }
+    // Buka modal pilihan
+    setPdfChoiceModal({ isOpen: true, santri, wali });
+  };
 
-    triggerConfirm(
-      'Reset Password & Cetak Biodata',
-      `Sistem akan mereset password akun wali "${wali.full_name}" ke password baru yang di-generate otomatis, lalu mencetak PDF biodata santri "${santri.nama}". Lanjutkan?`,
-      async () => {
-        try {
-          setActionDoneMsg('⏳ Mereset password & menyiapkan PDF...');
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData.session?.access_token || '';
+  // Cetak biodata saja (tanpa reset password)
+  const handlePrintBiodataOnly = async () => {
+    if (!pdfChoiceModal) return;
+    const { santri, wali } = pdfChoiceModal;
+    setPdfChoiceModal(null);
+    try {
+      setActionDoneMsg('⏳ Menyiapkan PDF biodata...');
+      generateBiodataPDF(
+        { nis: santri.nis, nama: santri.nama, kelas: santri.kelas, kamar: santri.kamar,
+          jenis_kelamin: santri.jenis_kelamin, tanggal_lahir: santri.tanggal_lahir,
+          alamat: santri.alamat, tahun_masuk: santri.tahun_masuk, bulan_masuk: santri.bulan_masuk },
+        { full_name: wali.full_name, email: wali.email || '-', phone: wali.phone, password: wali.password || '(lihat kartu lama)' },
+        profilPP
+      );
+      setActionDoneMsg(`✅ PDF biodata "${santri.nama}" berhasil dicetak!`);
+      setTimeout(() => setActionDoneMsg(null), 4000);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal: ${err.message}`);
+      setTimeout(() => setActionDoneMsg(null), 4000);
+    }
+  };
 
-          const response = await fetch('/api/admin/account/reset-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ user_id: wali.user_id })
-          });
+  // Reset password lalu cetak biodata
+  const handleResetAndPrint = async () => {
+    if (!pdfChoiceModal) return;
+    const { santri, wali } = pdfChoiceModal;
+    setPdfChoiceModal(null);
+    try {
+      setActionDoneMsg('⏳ Mereset password & menyiapkan PDF...');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token || '';
 
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'Gagal reset password.');
+      const response = await fetch('/api/admin/account/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ user_id: wali.user_id })
+      });
 
-          generateBiodataPDF(
-            { nis: santri.nis, nama: santri.nama, kelas: santri.kelas, kamar: santri.kamar,
-              jenis_kelamin: santri.jenis_kelamin, tanggal_lahir: santri.tanggal_lahir,
-              alamat: santri.alamat, tahun_masuk: santri.tahun_masuk, bulan_masuk: santri.bulan_masuk },
-            { full_name: wali.full_name, email: wali.email || '-', phone: wali.phone, password: result.new_password },
-            profilPP
-          );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Gagal reset password.');
 
-          setActionDoneMsg(`✅ Password direset & PDF biodata "${santri.nama}" berhasil dicetak!`);
-          setTimeout(() => setActionDoneMsg(null), 5000);
-        } catch (err: any) {
-          setActionDoneMsg(`❌ Gagal: ${err.message}`);
-          setTimeout(() => setActionDoneMsg(null), 5000);
-        }
-      }
-    );
+      generateBiodataPDF(
+        { nis: santri.nis, nama: santri.nama, kelas: santri.kelas, kamar: santri.kamar,
+          jenis_kelamin: santri.jenis_kelamin, tanggal_lahir: santri.tanggal_lahir,
+          alamat: santri.alamat, tahun_masuk: santri.tahun_masuk, bulan_masuk: santri.bulan_masuk },
+        { full_name: wali.full_name, email: wali.email || '-', phone: wali.phone, password: result.new_password },
+        profilPP
+      );
+
+      setActionDoneMsg(`✅ Password direset & PDF biodata "${santri.nama}" berhasil dicetak!`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal: ${err.message}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
   };
 
   const printAllBiodata = async () => {
@@ -5165,6 +5194,67 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white font-black text-[11px] rounded-xl cursor-pointer select-none transition-all shadow-xs active:scale-95"
               >
                 Konfirmasi / Lanjutkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pilihan Download PDF Biodata */}
+      {pdfChoiceModal && pdfChoiceModal.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4 text-left">
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+              <span className="text-xl">🖨️</span>
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-widest text-slate-900">Cetak PDF Biodata</h4>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{pdfChoiceModal.santri.nama}</p>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Pilih jenis PDF yang ingin dicetak:
+            </p>
+
+            {/* Pilihan 1: Biodata Saja */}
+            <button
+              type="button"
+              onClick={handlePrintBiodataOnly}
+              className="w-full text-left px-4 py-3.5 rounded-2xl border-2 border-slate-200 hover:border-green-400 hover:bg-green-50 transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📄</span>
+                <div>
+                  <p className="font-black text-[11px] text-slate-800 group-hover:text-green-800">Biodata Saja</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Cetak PDF dengan password yang sudah ada. Password wali tidak berubah.</p>
+                </div>
+              </div>
+            </button>
+
+            {/* Pilihan 2: Reset Password + Biodata */}
+            <button
+              type="button"
+              onClick={handleResetAndPrint}
+              className="w-full text-left px-4 py-3.5 rounded-2xl border-2 border-slate-200 hover:border-amber-400 hover:bg-amber-50 transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🔄</span>
+                <div>
+                  <p className="font-black text-[11px] text-slate-800 group-hover:text-amber-800">Reset Password + Biodata</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Generate password baru otomatis, lalu cetak PDF dengan password terbaru.</p>
+                </div>
+              </div>
+            </button>
+
+            {/* Batal */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setPdfChoiceModal(null)}
+                className="w-full px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px] rounded-xl cursor-pointer transition-all"
+              >
+                Batal
               </button>
             </div>
           </div>
