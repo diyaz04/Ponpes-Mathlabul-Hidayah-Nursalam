@@ -645,7 +645,13 @@ app.post('/api/admin/account/reset-password', async (req, res) => {
             return res.status(500).json({ error: error?.message || 'Gagal reset password.' });
         }
 
-        console.log(`[Reset Password] user_id=${user_id} password baru di-set`);
+        // Sync password baru ke tabel profiles agar validasi "password lama" di UserDashboard tetap akurat
+        await supabaseAdmin
+            .from('profiles')
+            .update({ password: String(finalPassword) })
+            .eq('user_id', user_id);
+
+        console.log(`[Reset Password] user_id=${user_id} password baru di-set & di-sync ke profiles`);
         return res.json({ success: true, new_password: finalPassword, user_id });
     } catch (error: any) {
         const statusCode = Number(error.statusCode || error.status || 500);

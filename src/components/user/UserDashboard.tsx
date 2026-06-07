@@ -223,11 +223,6 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
     // Optional password update
     let finalPassword = user.password || '123456';
     if (oldPassword || newPassword || confirmPassword) {
-      if (oldPassword !== (user.password || '123456')) {
-        setErrorMsg('🚨 Kata sandi lama salah! Silakan coba lagi.');
-        setTimeout(() => setErrorMsg(null), 5000);
-        return;
-      }
       if (!newPassword || newPassword.length < 6) {
         setErrorMsg('🚨 Kata sandi baru minimal harus 6 karakter.');
         setTimeout(() => setErrorMsg(null), 5000);
@@ -238,6 +233,20 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
         setTimeout(() => setErrorMsg(null), 5000);
         return;
       }
+
+      // Verifikasi password lama langsung ke Supabase Auth (bukan cek cache lokal)
+      // agar tetap valid meski admin baru saja mereset password via dashboard
+      const userEmail = user.email || profileEmail.trim();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: oldPassword
+      });
+      if (signInError) {
+        setErrorMsg('🚨 Kata sandi lama salah! Gunakan password terakhir dari kartu akses.');
+        setTimeout(() => setErrorMsg(null), 5000);
+        return;
+      }
+
       finalPassword = newPassword;
     }
 
