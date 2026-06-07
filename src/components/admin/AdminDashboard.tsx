@@ -474,150 +474,172 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     wali: { full_name: string; email: string; phone?: string; password: string },
     pesantren: { nama: string; alamat?: string; telepon?: string; email?: string } | null
   ) => {
+    // Load logo lalu generate PDF
+    const logoUrl = `${window.location.origin}/logo.svg`;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 128;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, 128, 128);
+      const logoBase64 = canvas.toDataURL('image/png');
+      _renderBiodataPDF(santri, wali, pesantren, logoBase64);
+    };
+    img.onerror = () => {
+      // Tetap generate PDF meski logo gagal load
+      _renderBiodataPDF(santri, wali, pesantren, null);
+    };
+    img.src = logoUrl;
+  };
+
+  const _renderBiodataPDF = (
+    santri: {
+      nis: string; nama: string; kelas: string; kamar?: string;
+      jenis_kelamin: string; tanggal_lahir: string; alamat?: string;
+      tahun_masuk: string; bulan_masuk?: string;
+    },
+    wali: { full_name: string; email: string; phone?: string; password: string },
+    pesantren: { nama: string; alamat?: string; telepon?: string; email?: string } | null,
+    logoBase64: string | null
+  ) => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210;
-    const GREEN_DARK  = [21, 128, 61]   as [number,number,number]; // #15803d
-    const GREEN_MID   = [22, 101, 52]   as [number,number,number]; // #166534
-    const GREEN_LIGHT = [220, 252, 231] as [number,number,number]; // #dcfce7
-    const GREEN_PALE  = [240, 253, 244] as [number,number,number]; // #f0fdf4
-    const GRAY_DARK   = [30, 41, 59]    as [number,number,number]; // slate-800
-    const GRAY_MID    = [100, 116, 139] as [number,number,number]; // slate-500
+    const GREEN_DARK  = [21, 128, 61]   as [number,number,number];
+    const GREEN_LIGHT = [220, 252, 231] as [number,number,number];
+    const GREEN_PALE  = [240, 253, 244] as [number,number,number];
+    const GRAY_DARK   = [30, 41, 59]    as [number,number,number];
+    const GRAY_MID    = [100, 116, 139] as [number,number,number];
     const WHITE       = [255, 255, 255] as [number,number,number];
 
     // ── HEADER BANNER ──────────────────────────────────────────
     doc.setFillColor(...GREEN_DARK);
-    doc.rect(0, 0, W, 42, 'F');
+    doc.rect(0, 0, W, 44, 'F');
 
-    // Ornament lingkaran kanan atas
-    doc.setFillColor(...GREEN_MID);
-    doc.circle(195, 0, 28, 'F');
-    doc.setFillColor(16, 185, 129, 0.3);
-    doc.circle(185, 38, 18, 'F');
+    // Aksen garis bawah header
+    doc.setFillColor(134, 239, 172);
+    doc.rect(0, 42, W, 2, 'F');
 
-    // Garis aksen bawah header
-    doc.setFillColor(134, 239, 172); // green-300
-    doc.rect(0, 40, W, 2, 'F');
+    // Logo
+    if (logoBase64) {
+      doc.addImage(logoBase64, 'PNG', 8, 5, 28, 28);
+    } else {
+      // Fallback: lingkaran dengan inisial
+      doc.setFillColor(...WHITE);
+      doc.circle(22, 19, 11, 'F');
+      doc.setFillColor(...GREEN_LIGHT);
+      doc.circle(22, 19, 9, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...GREEN_DARK);
+      doc.text('MH', 22, 22, { align: 'center' });
+    }
 
-    // Logo placeholder (lingkaran putih)
-    doc.setFillColor(...WHITE);
-    doc.circle(22, 21, 11, 'F');
-    doc.setFillColor(...GREEN_LIGHT);
-    doc.circle(22, 21, 9, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...GREEN_DARK);
-    doc.text('MH', 22, 24, { align: 'center' });
-
-    // Nama pesantren
+    // Nama & info pesantren
     doc.setTextColor(...WHITE);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text(pesantren?.nama || 'Pondok Pesantren', 38, 16);
+    doc.setFontSize(13);
+    const namaPesantren = pesantren?.nama || 'Pondok Pesantren';
+    doc.text(namaPesantren, 42, 14);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(187, 247, 208); // green-200
+    doc.setFontSize(7.5);
+    doc.setTextColor(187, 247, 208);
     if (pesantren?.alamat) {
-      doc.text(pesantren.alamat.substring(0, 60), 38, 23);
+      doc.text(pesantren.alamat.substring(0, 65), 42, 21);
     }
     if (pesantren?.telepon) {
-      doc.text(`Telp: ${pesantren.telepon}  |  ${pesantren.email || ''}`, 38, 29);
+      const kontakLine = `Telp: ${pesantren.telepon}${pesantren.email ? '  |  ' + pesantren.email : ''}`;
+      doc.text(kontakLine, 42, 27);
     }
 
-    // Label dokumen kanan
+    // Badge kanan atas
     doc.setFillColor(...GREEN_LIGHT);
-    doc.roundedRect(130, 5, 65, 12, 3, 3, 'F');
+    doc.roundedRect(132, 6, 64, 11, 2, 2, 'F');
     doc.setTextColor(...GREEN_DARK);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('KARTU BIODATA SANTRI', 162, 13, { align: 'center' });
+    doc.setFontSize(7.5);
+    doc.text('KARTU BIODATA SANTRI', 164, 13.5, { align: 'center' });
 
     // ── JUDUL DOKUMEN ──────────────────────────────────────────
     doc.setFillColor(...GREEN_PALE);
-    doc.rect(0, 42, W, 14, 'F');
+    doc.rect(0, 44, W, 13, 'F');
     doc.setTextColor(...GREEN_DARK);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('BIODATA & AKUN PORTAL SANTRI', W / 2, 52, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text('BIODATA & AKUN PORTAL SANTRI', W / 2, 53, { align: 'center' });
 
-    // ── SECTION: DATA DIRI ─────────────────────────────────────
     let y = 64;
 
     const drawSectionTitle = (title: string, yPos: number) => {
       doc.setFillColor(...GREEN_DARK);
-      doc.roundedRect(14, yPos, 90, 7, 2, 2, 'F');
+      doc.roundedRect(14, yPos, 95, 7, 2, 2, 'F');
       doc.setTextColor(...WHITE);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.text(`  ${title}`, 14, yPos + 5);
+      doc.setFontSize(7.5);
+      doc.text(`  ${title}`, 16, yPos + 5);
     };
 
-    const drawField = (label: string, value: string, xL: number, xV: number, yPos: number, fullWidth = false) => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
+    const drawField = (label: string, value: string, xL: number, yPos: number, maxW = 75) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
       doc.setTextColor(...GRAY_MID);
       doc.text(label, xL, yPos);
-
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
       doc.setTextColor(...GRAY_DARK);
-      const maxW = fullWidth ? 150 : 70;
-      doc.text(value || '-', xV, yPos + 5, { maxWidth: maxW });
+      doc.text(value || '-', xL, yPos + 5, { maxWidth: maxW });
     };
-
-    // Card putih data diri
-    doc.setFillColor(...WHITE);
-    doc.setDrawColor(...GREEN_LIGHT);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(14, y, W - 28, 72, 3, 3, 'FD');
-
-    drawSectionTitle('DATA DIRI SANTRI', y - 1);
-    y += 10;
 
     const formatDate = (d: string) => {
       if (!d) return '-';
-      try {
-        return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-      } catch { return d; }
+      try { return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }); }
+      catch { return d; }
     };
 
-    // 2 kolom kiri-kanan
-    drawField('NIS (Nomor Induk Santri)', santri.nis, 20, 20, y);
-    drawField('Kelas / Halaqah', santri.kelas, 115, 115, y);
-    y += 13;
-    drawField('Nama Lengkap', santri.nama, 20, 20, y);
-    drawField('Kamar / Asrama', santri.kamar || '-', 115, 115, y);
-    y += 13;
-    drawField('Jenis Kelamin', santri.jenis_kelamin === 'L' ? 'Laki-laki (Ikhwan)' : 'Perempuan (Akhwat)', 20, 20, y);
-    drawField('Thn. Masuk Pondok', `${santri.bulan_masuk || ''} ${santri.tahun_masuk}`, 115, 115, y);
-    y += 13;
-    drawField('Tanggal Lahir', formatDate(santri.tanggal_lahir), 20, 20, y);
-    y += 13;
-    drawField('Alamat Domisili', santri.alamat || '-', 20, 20, y, true);
-    y += 18;
+    // ── SECTION: DATA DIRI ─────────────────────────────────────
+    doc.setFillColor(...WHITE);
+    doc.setDrawColor(...GREEN_LIGHT);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(14, y, W - 28, 74, 3, 3, 'FD');
+    drawSectionTitle('DATA DIRI SANTRI', y - 1);
+    y += 11;
+
+    // Baris 1
+    drawField('NIS (Nomor Induk Santri)', santri.nis, 20, y);
+    drawField('Kelas / Halaqah', santri.kelas, 115, y);
+    y += 14;
+    // Baris 2
+    drawField('Nama Lengkap', santri.nama, 20, y);
+    drawField('Kamar / Asrama', santri.kamar || '-', 115, y);
+    y += 14;
+    // Baris 3
+    drawField('Jenis Kelamin', santri.jenis_kelamin === 'L' ? 'Laki-laki (Ikhwan)' : 'Perempuan (Akhwat)', 20, y);
+    drawField('Thn. Masuk Pondok', `${santri.bulan_masuk || ''} ${santri.tahun_masuk}`.trim(), 115, y);
+    y += 14;
+    // Baris 4
+    drawField('Tanggal Lahir', formatDate(santri.tanggal_lahir), 20, y);
+    y += 14;
+    // Baris 5 — alamat full width
+    drawField('Alamat Domisili', santri.alamat || '-', 20, y, 168);
+    y += 16;
 
     // ── SECTION: DATA WALI ─────────────────────────────────────
     doc.setFillColor(...WHITE);
     doc.setDrawColor(...GREEN_LIGHT);
-    doc.roundedRect(14, y, W - 28, 42, 3, 3, 'FD');
+    doc.roundedRect(14, y, W - 28, 40, 3, 3, 'FD');
     drawSectionTitle('DATA WALI / ORANG TUA', y - 1);
-    y += 10;
+    y += 11;
 
-    drawField('Nama Wali / Orang Tua', wali.full_name, 20, 20, y);
-    drawField('No. WhatsApp / Telepon', wali.phone || '-', 115, 115, y);
-    y += 13;
-    drawField('Email Wali', wali.email, 20, 20, y);
-    y += 20;
+    drawField('Nama Wali / Orang Tua', wali.full_name, 20, y);
+    drawField('No. WhatsApp / Telepon', wali.phone || '-', 115, y);
+    y += 14;
+    drawField('Email Wali', wali.email, 20, y);
+    y += 18;
 
-    // ── SECTION: AKUN PORTAL (kotak hijau menarik) ─────────────
+    // ── SECTION: AKUN PORTAL ───────────────────────────────────
     doc.setFillColor(...GREEN_DARK);
-    doc.roundedRect(14, y, W - 28, 46, 4, 4, 'F');
-
-    // Ornamen
-    doc.setFillColor(...GREEN_MID);
-    doc.circle(W - 14, y + 46, 22, 'F');
-    doc.setFillColor(22, 163, 74, 0.4);
-    doc.circle(14, y, 15, 'F');
+    doc.roundedRect(14, y, W - 28, 44, 4, 4, 'F');
 
     doc.setTextColor(134, 239, 172);
     doc.setFont('helvetica', 'bold');
@@ -625,65 +647,68 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.text('AKUN LOGIN PORTAL WALI SANTRI', W / 2, y + 8, { align: 'center' });
 
     doc.setFillColor(...GREEN_LIGHT);
-    doc.roundedRect(20, y + 11, W - 40, 28, 3, 3, 'F');
+    doc.roundedRect(20, y + 12, W - 40, 26, 3, 3, 'F');
 
-    // Email
+    // Kolom kiri: Email
     doc.setTextColor(...GRAY_MID);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.text('USERNAME / EMAIL LOGIN', 30, y + 18);
+    doc.setFontSize(6.5);
+    doc.text('USERNAME / EMAIL LOGIN', 28, y + 19);
     doc.setTextColor(...GREEN_DARK);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(wali.email, 30, y + 25);
+    doc.setFontSize(9.5);
+    // Truncate email panjang agar tidak nabrak password
+    const emailDisplay = wali.email.length > 28 ? wali.email.substring(0, 26) + '..' : wali.email;
+    doc.text(emailDisplay, 28, y + 27);
 
-    // Password
+    // Divider vertikal
+    doc.setDrawColor(...GREEN_DARK);
+    doc.setLineWidth(0.3);
+    doc.line(115, y + 15, 115, y + 35);
+
+    // Kolom kanan: Password
     doc.setTextColor(...GRAY_MID);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.text('PASSWORD / KATA SANDI', 125, y + 18);
+    doc.setFontSize(6.5);
+    doc.text('PASSWORD / KATA SANDI', 122, y + 19);
     doc.setTextColor(...GREEN_DARK);
     doc.setFont('courier', 'bold');
-    doc.setFontSize(13);
-    doc.text(wali.password, 125, y + 26);
+    doc.setFontSize(14);
+    doc.text(wali.password, 122, y + 28);
 
-    y += 52;
+    y += 50;
 
     // ── SECTION: URL PORTAL ────────────────────────────────────
     doc.setFillColor(...GREEN_PALE);
     doc.setDrawColor(...GREEN_LIGHT);
-    doc.roundedRect(14, y, W - 28, 18, 3, 3, 'FD');
+    doc.roundedRect(14, y, W - 28, 20, 3, 3, 'FD');
     doc.setTextColor(...GRAY_MID);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
-    doc.text('🌐  Akses Portal Orang Tua / Wali Santri:', 20, y + 7);
+    doc.text('Akses Portal Orang Tua / Wali Santri:', 20, y + 7);
     doc.setTextColor(...GREEN_DARK);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text(window.location.origin, 20, y + 14);
-
     doc.setTextColor(...GRAY_MID);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.text('Simpan dokumen ini dengan aman. Jangan bagikan kata sandi kepada pihak yang tidak berkepentingan.', W / 2, y + 14, { align: 'center', maxWidth: 130 });
+    doc.setFontSize(7);
+    doc.text('Simpan dokumen ini dengan aman. Jangan bagikan kata sandi kepada pihak yang tidak berkepentingan.', 20, y + 19, { maxWidth: 180 });
 
-    y += 24;
+    y += 26;
 
-    // ── TANDA TANGAN ───────────────────────────────────────────
+    // ── TANDA TANGAN & TANGGAL ─────────────────────────────────
     const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-
     doc.setTextColor(...GRAY_MID);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text(`Diterbitkan pada: ${today}`, 20, y + 6);
-
-    // Garis TTD
     doc.setDrawColor(...GREEN_LIGHT);
     doc.setLineWidth(0.3);
-    doc.line(130, y + 22, W - 14, y + 22);
+    doc.line(130, y + 24, W - 14, y + 24);
     doc.setTextColor(...GRAY_MID);
     doc.setFontSize(7);
-    doc.text('Pimpinan / Administrator Pesantren', 162, y + 28, { align: 'center' });
+    doc.text('Pimpinan / Administrator Pesantren', 162, y + 30, { align: 'center' });
 
     // ── FOOTER ─────────────────────────────────────────────────
     doc.setFillColor(...GREEN_DARK);
@@ -691,9 +716,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.setTextColor(187, 247, 208);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text(`${pesantren?.nama || 'Pondok Pesantren'} — Dokumen Resmi Pesantren`, W / 2, 291, { align: 'center' });
+    doc.text(`${namaPesantren} — Dokumen Resmi Pesantren`, W / 2, 291, { align: 'center' });
 
-    // Save
     const safeName = santri.nama.replace(/\s+/g, '_');
     doc.save(`Biodata_${santri.nis}_${safeName}.pdf`);
   };
