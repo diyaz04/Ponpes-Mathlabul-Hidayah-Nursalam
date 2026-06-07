@@ -348,6 +348,242 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     setShowPupilModal(true);
   };
 
+  // ============================================================
+  // GENERATE BIODATA PDF SANTRI — otomatis setelah pendaftaran
+  // ============================================================
+  const generateBiodataPDF = (
+    santri: {
+      nis: string; nama: string; kelas: string; kamar?: string;
+      jenis_kelamin: string; tanggal_lahir: string; alamat?: string;
+      tahun_masuk: string; bulan_masuk?: string;
+    },
+    wali: { full_name: string; email: string; phone?: string; password: string },
+    pesantren: { nama: string; alamat?: string; telepon?: string; email?: string } | null
+  ) => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210;
+    const GREEN_DARK  = [21, 128, 61]   as [number,number,number]; // #15803d
+    const GREEN_MID   = [22, 101, 52]   as [number,number,number]; // #166534
+    const GREEN_LIGHT = [220, 252, 231] as [number,number,number]; // #dcfce7
+    const GREEN_PALE  = [240, 253, 244] as [number,number,number]; // #f0fdf4
+    const GRAY_DARK   = [30, 41, 59]    as [number,number,number]; // slate-800
+    const GRAY_MID    = [100, 116, 139] as [number,number,number]; // slate-500
+    const WHITE       = [255, 255, 255] as [number,number,number];
+
+    // ── HEADER BANNER ──────────────────────────────────────────
+    doc.setFillColor(...GREEN_DARK);
+    doc.rect(0, 0, W, 42, 'F');
+
+    // Ornament lingkaran kanan atas
+    doc.setFillColor(...GREEN_MID);
+    doc.circle(195, 0, 28, 'F');
+    doc.setFillColor(16, 185, 129, 0.3);
+    doc.circle(185, 38, 18, 'F');
+
+    // Garis aksen bawah header
+    doc.setFillColor(134, 239, 172); // green-300
+    doc.rect(0, 40, W, 2, 'F');
+
+    // Logo placeholder (lingkaran putih)
+    doc.setFillColor(...WHITE);
+    doc.circle(22, 21, 11, 'F');
+    doc.setFillColor(...GREEN_LIGHT);
+    doc.circle(22, 21, 9, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...GREEN_DARK);
+    doc.text('MH', 22, 24, { align: 'center' });
+
+    // Nama pesantren
+    doc.setTextColor(...WHITE);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(pesantren?.nama || 'Pondok Pesantren', 38, 16);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(187, 247, 208); // green-200
+    if (pesantren?.alamat) {
+      doc.text(pesantren.alamat.substring(0, 60), 38, 23);
+    }
+    if (pesantren?.telepon) {
+      doc.text(`Telp: ${pesantren.telepon}  |  ${pesantren.email || ''}`, 38, 29);
+    }
+
+    // Label dokumen kanan
+    doc.setFillColor(...GREEN_LIGHT);
+    doc.roundedRect(130, 5, 65, 12, 3, 3, 'F');
+    doc.setTextColor(...GREEN_DARK);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('KARTU BIODATA SANTRI', 162, 13, { align: 'center' });
+
+    // ── JUDUL DOKUMEN ──────────────────────────────────────────
+    doc.setFillColor(...GREEN_PALE);
+    doc.rect(0, 42, W, 14, 'F');
+    doc.setTextColor(...GREEN_DARK);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('BIODATA & AKUN PORTAL SANTRI', W / 2, 52, { align: 'center' });
+
+    // ── SECTION: DATA DIRI ─────────────────────────────────────
+    let y = 64;
+
+    const drawSectionTitle = (title: string, yPos: number) => {
+      doc.setFillColor(...GREEN_DARK);
+      doc.roundedRect(14, yPos, 90, 7, 2, 2, 'F');
+      doc.setTextColor(...WHITE);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(`  ${title}`, 14, yPos + 5);
+    };
+
+    const drawField = (label: string, value: string, xL: number, xV: number, yPos: number, fullWidth = false) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...GRAY_MID);
+      doc.text(label, xL, yPos);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...GRAY_DARK);
+      const maxW = fullWidth ? 150 : 70;
+      doc.text(value || '-', xV, yPos + 5, { maxWidth: maxW });
+    };
+
+    // Card putih data diri
+    doc.setFillColor(...WHITE);
+    doc.setDrawColor(...GREEN_LIGHT);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(14, y, W - 28, 72, 3, 3, 'FD');
+
+    drawSectionTitle('DATA DIRI SANTRI', y - 1);
+    y += 10;
+
+    const formatDate = (d: string) => {
+      if (!d) return '-';
+      try {
+        return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+      } catch { return d; }
+    };
+
+    // 2 kolom kiri-kanan
+    drawField('NIS (Nomor Induk Santri)', santri.nis, 20, 20, y);
+    drawField('Kelas / Halaqah', santri.kelas, 115, 115, y);
+    y += 13;
+    drawField('Nama Lengkap', santri.nama, 20, 20, y);
+    drawField('Kamar / Asrama', santri.kamar || '-', 115, 115, y);
+    y += 13;
+    drawField('Jenis Kelamin', santri.jenis_kelamin === 'L' ? 'Laki-laki (Ikhwan)' : 'Perempuan (Akhwat)', 20, 20, y);
+    drawField('Thn. Masuk Pondok', `${santri.bulan_masuk || ''} ${santri.tahun_masuk}`, 115, 115, y);
+    y += 13;
+    drawField('Tanggal Lahir', formatDate(santri.tanggal_lahir), 20, 20, y);
+    y += 13;
+    drawField('Alamat Domisili', santri.alamat || '-', 20, 20, y, true);
+    y += 18;
+
+    // ── SECTION: DATA WALI ─────────────────────────────────────
+    doc.setFillColor(...WHITE);
+    doc.setDrawColor(...GREEN_LIGHT);
+    doc.roundedRect(14, y, W - 28, 42, 3, 3, 'FD');
+    drawSectionTitle('DATA WALI / ORANG TUA', y - 1);
+    y += 10;
+
+    drawField('Nama Wali / Orang Tua', wali.full_name, 20, 20, y);
+    drawField('No. WhatsApp / Telepon', wali.phone || '-', 115, 115, y);
+    y += 13;
+    drawField('Email Wali', wali.email, 20, 20, y);
+    y += 20;
+
+    // ── SECTION: AKUN PORTAL (kotak hijau menarik) ─────────────
+    doc.setFillColor(...GREEN_DARK);
+    doc.roundedRect(14, y, W - 28, 46, 4, 4, 'F');
+
+    // Ornamen
+    doc.setFillColor(...GREEN_MID);
+    doc.circle(W - 14, y + 46, 22, 'F');
+    doc.setFillColor(22, 163, 74, 0.4);
+    doc.circle(14, y, 15, 'F');
+
+    doc.setTextColor(134, 239, 172);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('AKUN LOGIN PORTAL WALI SANTRI', W / 2, y + 8, { align: 'center' });
+
+    doc.setFillColor(...GREEN_LIGHT);
+    doc.roundedRect(20, y + 11, W - 40, 28, 3, 3, 'F');
+
+    // Email
+    doc.setTextColor(...GRAY_MID);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('USERNAME / EMAIL LOGIN', 30, y + 18);
+    doc.setTextColor(...GREEN_DARK);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(wali.email, 30, y + 25);
+
+    // Password
+    doc.setTextColor(...GRAY_MID);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('PASSWORD / KATA SANDI', 125, y + 18);
+    doc.setTextColor(...GREEN_DARK);
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(13);
+    doc.text(wali.password, 125, y + 26);
+
+    y += 52;
+
+    // ── SECTION: URL PORTAL ────────────────────────────────────
+    doc.setFillColor(...GREEN_PALE);
+    doc.setDrawColor(...GREEN_LIGHT);
+    doc.roundedRect(14, y, W - 28, 18, 3, 3, 'FD');
+    doc.setTextColor(...GRAY_MID);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('🌐  Akses Portal Orang Tua / Wali Santri:', 20, y + 7);
+    doc.setTextColor(...GREEN_DARK);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(window.location.origin, 20, y + 14);
+
+    doc.setTextColor(...GRAY_MID);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text('Simpan dokumen ini dengan aman. Jangan bagikan kata sandi kepada pihak yang tidak berkepentingan.', W / 2, y + 14, { align: 'center', maxWidth: 130 });
+
+    y += 24;
+
+    // ── TANDA TANGAN ───────────────────────────────────────────
+    const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    doc.setTextColor(...GRAY_MID);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(`Diterbitkan pada: ${today}`, 20, y + 6);
+
+    // Garis TTD
+    doc.setDrawColor(...GREEN_LIGHT);
+    doc.setLineWidth(0.3);
+    doc.line(130, y + 22, W - 14, y + 22);
+    doc.setTextColor(...GRAY_MID);
+    doc.setFontSize(7);
+    doc.text('Pimpinan / Administrator Pesantren', 162, y + 28, { align: 'center' });
+
+    // ── FOOTER ─────────────────────────────────────────────────
+    doc.setFillColor(...GREEN_DARK);
+    doc.rect(0, 282, W, 15, 'F');
+    doc.setTextColor(187, 247, 208);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(`${pesantren?.nama || 'Pondok Pesantren'} — Dokumen Resmi Pesantren`, W / 2, 291, { align: 'center' });
+
+    // Save
+    const safeName = santri.nama.replace(/\s+/g, '_');
+    doc.save(`Biodata_${santri.nis}_${safeName}.pdf`);
+  };
+
   const handleSavePupil = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalWaliId = pWaliId;
@@ -393,7 +629,20 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           throw new Error(result.error || 'Gagal membuat wali dan santri.');
         }
 
-        setActionDoneMsg('Santri baru berhasil didaftarkan dan akun Supabase Auth wali otomatis terbuat!');
+        // 🖨️ Auto-generate biodata PDF
+        generateBiodataPDF(
+          { nis: pNis, nama: pNama, kelas: pKelas, kamar: pKamar, jenis_kelamin: pJK,
+            tanggal_lahir: pBirth, alamat: pAlamat, tahun_masuk: pTahunMasuk, bulan_masuk: pBulanMasuk },
+          { full_name: newWaliFullName || `Wali dari ${pNama}`, email: newWaliEmail.trim().toLowerCase(),
+            phone: newWaliPhone, password: newWaliPassword || '123456' },
+          profilPP
+        );
+
+        setActionDoneMsg('✅ Santri didaftarkan! Akun wali dibuat & biodata PDF otomatis terunduh.');
+        await refreshAdminData();
+        setTimeout(() => setActionDoneMsg(null), 5000);
+        setShowPupilModal(false);
+        return;
         await refreshAdminData();
         setTimeout(() => setActionDoneMsg(null), 5000);
         setShowPupilModal(false);
@@ -433,7 +682,20 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           bulan_masuk: pBulanMasuk
         });
         if (error) throw error;
-        setActionDoneMsg('Santri baru berhasil didaftarkan di Supabase!');
+
+        // 🖨️ Auto-generate biodata PDF (wali sudah ada, ambil dari profilesList)
+        const existingWali = profilesList.find(p => p.id === finalWaliId);
+        if (existingWali) {
+          generateBiodataPDF(
+            { nis: pNis, nama: pNama, kelas: pKelas, kamar: pKamar, jenis_kelamin: pJK,
+              tanggal_lahir: pBirth, alamat: pAlamat, tahun_masuk: pTahunMasuk, bulan_masuk: pBulanMasuk },
+            { full_name: existingWali.full_name, email: existingWali.email || '-',
+              phone: existingWali.phone, password: '(gunakan password yang sudah ada)' },
+            profilPP
+          );
+        }
+
+        setActionDoneMsg('✅ Santri baru didaftarkan & biodata PDF otomatis terunduh!');
       }
 
       await refreshAdminData();
