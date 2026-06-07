@@ -534,6 +534,31 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           return;
         }
 
+        // Konversi Excel serial number ke format YYYY-MM-DD
+        // Excel menyimpan tanggal sebagai angka hari sejak 1 Jan 1900
+        const excelSerialToDate = (serial: any): string => {
+          const str = String(serial).trim();
+          // Kalau sudah format YYYY-MM-DD, langsung return
+          if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+          // Kalau format DD/MM/YYYY atau DD-MM-YYYY
+          if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(str)) {
+            const parts = str.split(/[\/\-]/);
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+          }
+          // Kalau angka (Excel serial date)
+          const num = Number(str);
+          if (!isNaN(num) && num > 1000) {
+            // Excel epoch: 1 Jan 1900 = serial 1 (ada bug Excel: 1900 dianggap leap year)
+            const excelEpoch = new Date(1899, 11, 30);
+            const date = new Date(excelEpoch.getTime() + num * 86400000);
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+          }
+          return str || '2011-01-01';
+        };
+
         const getFieldValFromRow = (rowObj: any, keysToTry: string[]): string => {
           if (!rowObj) return '';
           const objKeys = Object.keys(rowObj);
@@ -562,7 +587,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           const kelas = getFieldValFromRow(rowObj, ['kelas']);
           const kamar = getFieldValFromRow(rowObj, ['kamar', 'asrama']);
           const jk = getFieldValFromRow(rowObj, ['jeniskelamin', 'gender', 'jk', 'kelamin']);
-          const birth = getFieldValFromRow(rowObj, ['tanggallahir', 'tgllahir', 'lahir']);
+          const birth = excelSerialToDate(getFieldValFromRow(rowObj, ['tanggallahir', 'tgllahir', 'lahir']) || '2011-01-01');
           const alamat = getFieldValFromRow(rowObj, ['alamat', 'domisili']);
           const bulanMasuk = getFieldValFromRow(rowObj, ['bulanmasuk', 'bulan']);
           const tahunMasuk = getFieldValFromRow(rowObj, ['tahunmasuk', 'tahun']);
@@ -581,7 +606,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             kelas,
             kamar: kamar || 'Belum Ditunjuk',
             jk: (jk && jk.toUpperCase().startsWith('P')) ? 'P' : 'L',
-            birth: birth || '2011-01-01',
+            birth: birth,
             alamat: alamat || '',
             bulanMasuk: bulanMasuk || 'Januari',
             tahunMasuk: tahunMasuk || '2026',
