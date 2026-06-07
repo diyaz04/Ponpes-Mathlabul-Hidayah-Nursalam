@@ -525,6 +525,43 @@ app.post('/api/admin/account/create', async (req, res) => {
     }
 });
 
+// Reset password wali oleh admin + sync ke tabel profiles
+app.post('/api/admin/account/reset-password', async (req, res) => {
+    try {
+        const { supabaseAdmin } = await verifyAdminRequest(req);
+        const { user_id, new_password } = req.body || {};
+
+        if (!user_id) {
+            return res.status(400).json({ error: 'user_id wajib diisi.' });
+        }
+
+        // Generate password baru jika tidak disuplai
+        const finalPassword = new_password || Math.random().toString(36).slice(2, 8).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+
+        // Update password di Supabase Auth
+        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
+            password: String(finalPassword)
+        });
+
+        if (error || !data.user) {
+            return res.status(500).json({ error: error?.message || 'Gagal reset password.' });
+        }
+
+        // Sync password baru ke tabel profiles agar validasi "password lama" di UserDashboard tetap akurat
+        await supabaseAdmin
+            .from('profiles')
+            .update({ password: String(finalPassword) })
+            .eq('user_id', user_id);
+
+        console.log(`[Reset Password] user_id=${user_id} password baru di-set & di-sync ke profiles`);
+        return res.json({ success: true, new_password: finalPassword, user_id });
+    } catch (error: any) {
+        const statusCode = Number(error.statusCode || error.status || 500);
+        console.error('[Reset Password Error]', error);
+        return res.status(statusCode).json({ error: error.message || 'Gagal reset password.' });
+    }
+});
+
 // ✅ FIX 2: Webhook diubah jadi async handler yang proper
 // Bug lama: handler sync tapi pakai .then()/.catch() — bisa bikin race condition
 // dan response kadang ga kekirim sebelum Midtrans timeout
@@ -624,55 +661,7 @@ async function setupFrontend() {
         console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
         console.log(`[Server] Midtrans mode: ${process.env.MIDTRANS_IS_PRODUCTION === 'true' ? 'PRODUCTION' : 'SANDBOX'}`);
 
-        // Reset password wali + return password baru (untuk cetak ulang PDF biodata)
-app.post('/api/admin/account/reset-password', async (req, res) => {
-    try {
-        const { supabaseAdmin } = await verifyAdminRequest(req);
-        const { user_id, new_password } = req.body || {};
-
-        if (!user_id) {
-            return res.status(400).json({ error: 'user_id wajib diisi.' });
-        }
-
-        // Generate password baru jika tidak disuplai
-        const finalPassword = new_password || Math.random().toString(36).slice(2, 8).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
-
-        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
-            password: String(finalPassword)
-        });
-
-        if (error || !data.user) {
-            return res.status(500).json({ error: error?.message || 'Gagal reset password.' });
-        }
-
-        // Sync password baru ke tabel profiles agar validasi "password lama" di UserDashboard tetap akurat
-        await supabaseAdmin
-            .from('profiles')
-            .update({ password: String(finalPassword) })
-            .eq('user_id', user_id);
-
-        console.log(`[Reset Password] user_id=${user_id} password baru di-set & di-sync ke profiles`);
-        return res.json({ success: true, new_password: finalPassword, user_id });
-    } catch (error: any) {
-        const statusCode = Number(error.statusCode || error.status || 500);
-        console.error('[Reset Password Error]', error);
-        return res.status(statusCode).json({ error: error.message || 'Gagal reset password.' });
-    }
-});
-
-        // KeepAlive: self-ping setiap 10 menit supaya Render free tier tidak sleep
-        const APP_URL = process.env.APP_URL || `https://ponpes-mathlabul-hidayah-nursalam.onrender.com`;
-        if (process.env.NODE_ENV === 'production') {
-            setInterval(async () => {
-                try {
-                    const res = await fetch(`${APP_URL}/api/health`);
-                    console.log(`[KeepAlive] Ping OK — ${new Date().toISOString()}`);
-                } catch (err: any) {
-                    console.warn(`[KeepAlive] Ping gagal: ${err.message}`);
-                }
-            }, 10 * 60 * 1000);
-            console.log(`[KeepAlive] Self-ping aktif setiap 10 menit ke ${APP_URL}/api/health`);
-        }
+        // KeepAlive ditangani oleh UptimeRobot (ping eksternal setiap 5 menit ke /api/health)
     });
 }
 
