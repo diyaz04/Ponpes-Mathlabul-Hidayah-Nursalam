@@ -1,30 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useNotifikasi } from './hooks/useNotifikasi';
-import { useRealtime } from './hooks/useRealtime';
-import { dbLocal, supabase, isRealSupabaseConfigured } from './lib/supabase';
+import { db } from './lib/supabase';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
-import { Footer } from './components/layout/Footer';
 import { UserDashboard } from './components/user/UserDashboard';
 import { GuruDashboard } from './components/guru/GuruDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { LandingPage } from './components/landing/LandingPage';
-import { 
-  Sparkles, BookOpen, Clock, Heart, Award, CheckCircle2, 
-  MapPin, Phone, Mail, LogIn, ChevronRight, GraduationCap, 
-  User, ShieldAlert, CreditCard, ShieldCheck, Newspaper 
-} from 'lucide-react';
 
 export default function App() {
   const { user, login, logout } = useAuth();
-  const { notifications, unreadCount } = useNotifikasi();
+  useNotifikasi();
 
   const [beritaList, setBeritaList] = useState<any[]>([]);
 
-  useRealtime(() => {
-    setBeritaList(dbLocal.getBerita());
-  });
+  useEffect(() => {
+    db.berita()
+      .then(setBeritaList)
+      .catch((error) => console.error('[Supabase Berita Load Failure]', error));
+  }, []);
 
   // Navigation states
   const [activeMenu, setActiveMenu] = useState('overview'); // state matches Sidebar id
@@ -39,25 +34,9 @@ export default function App() {
     }
   }, [user]);
 
-  // Handle preset quick logins for easy presenter evaluation
   const handlePresetLogin = async (role: 'user' | 'guru' | 'admin') => {
     setLoginError(null);
-    let email = '';
-
-    if (role === 'admin') {
-      email = 'adminnursalam@gmail.com';
-    } else if (role === 'guru') {
-      email = 'fauzi@mathlabulhidayah.sch.id';
-    } else {
-      email = 'kurniawan@gmail.com';
-    }
-
-    const matches = dbLocal.getProfiles().find(p => p.email?.toLowerCase() === email.toLowerCase());
-    if (matches) {
-      login(matches.role, matches.id);
-    } else {
-      setLoginError('Koneksi sistem terganggu. Sila muat ulang halaman.');
-    }
+    setLoginError(`Login cepat ${role} dinonaktifkan. Masuk dengan akun Supabase resmi.`);
   };
 
   const handleLandingManualLogin = async (e: React.FormEvent, email: string, pass: string) => {
@@ -68,55 +47,10 @@ export default function App() {
       return;
     }
 
-    // 1. If real Supabase client is configured, check auth via Supabase
-    if (isRealSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password: pass
-        });
-        if (error) {
-          throw error;
-        }
-        if (data.user) {
-          // Sync with local fallback structures
-          let profile = dbLocal.getProfiles().find(p => p.email?.toLowerCase() === email.trim().toLowerCase());
-          if (!profile) {
-            const userRole = (data.user.user_metadata?.role || 'user') as any;
-            const fullName = data.user.user_metadata?.full_name || 'Pengguna Baru';
-            const newProfiles = dbLocal.getProfiles();
-            const newP = {
-              id: data.user.id,
-              role: userRole,
-              full_name: fullName,
-              email: email.trim().toLowerCase(),
-              is_active: true,
-              password: pass,
-              avatar_url: data.user.user_metadata?.avatar_url || ''
-            };
-            dbLocal.setProfiles([...newProfiles, newP]);
-            profile = newP;
-          }
-          login(profile.role, profile.id);
-          return;
-        }
-      } catch (err: any) {
-        console.warn('[Supabase Auth Failure] Fallback to local profiles...', err.message);
-        // We will continue to fallback below, but if user explicitly has incorrect supabase pass on real config,
-        // we can still let them slide locally to prevent local testing freeze, or lock/prompt. Let's let them fall back!
-      }
-    }
-
-    // 2. Fallback to storage profiles (e.g. adminnursalam@gmail.com pre-seeded or local-only)
-    const matches = dbLocal.getProfiles().find(p => p.email?.toLowerCase() === email.trim().toLowerCase());
-    if (matches) {
-      if (matches.password && matches.password !== pass) {
-        setLoginError('Sandi yang dimasukkan salah. Harap koreksi sandi Anda.');
-        return;
-      }
-      login(matches.role, matches.id);
-    } else {
-      setLoginError('Alamat email belum terdaftar dalam portal pesantren ini.');
+    try {
+      await login('user', email, pass);
+    } catch (err: any) {
+      setLoginError(err.message || 'Login Supabase gagal.');
     }
   };
 

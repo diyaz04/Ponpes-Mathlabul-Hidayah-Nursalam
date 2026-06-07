@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Footer } from '../layout/Footer';
-import { dbLocal } from '../../lib/supabase';
+import { db } from '../../lib/supabase';
 import { ProfilPesantren } from '../../types';
 
 interface LandingPageProps {
@@ -25,18 +25,12 @@ export function LandingPage({
   loginError 
 }: LandingPageProps) {
   
-  // Load and keep ProfilPesantren from dbLocal dynamically
   const [profilPP, setProfilPP] = useState<ProfilPesantren | null>(null);
 
   useEffect(() => {
-    setProfilPP(dbLocal.getProfilPesantren());
-    const handleLocalSync = () => {
-      setProfilPP(dbLocal.getProfilPesantren());
-    };
-    window.addEventListener('mh_local_store_change', handleLocalSync);
-    return () => {
-      window.removeEventListener('mh_local_store_change', handleLocalSync);
-    };
+    db.profilPesantren()
+      .then(setProfilPP)
+      .catch((error) => console.error('[Supabase Profil Pesantren Load Failure]', error));
   }, []);
 
   // news index for dynamic hero news swap

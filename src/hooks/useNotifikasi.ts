@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Notifikasi } from '../types';
-import { dbLocal } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 
 export function useNotifikasi() {
@@ -8,15 +8,25 @@ export function useNotifikasi() {
   const [notifications, setNotifications] = useState<Notifikasi[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const reloadNotifications = () => {
+  const reloadNotifications = async () => {
     if (!user) {
       setNotifications([]);
       setUnreadCount(0);
       return;
     }
-    const all = dbLocal.getNotifikasi();
-    // Filter for current user's profile ID
-    const mine = all.filter(n => n.user_id === user.id);
+
+    const { data, error } = await supabase
+      .from('notifikasi')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[Supabase Notifikasi Load Failure]', error);
+      return;
+    }
+
+    const mine = (data || []) as Notifikasi[];
     setNotifications(mine);
     setUnreadCount(mine.filter(n => !n.is_read).length);
   };
@@ -24,31 +34,40 @@ export function useNotifikasi() {
   useEffect(() => {
     reloadNotifications();
 
-    // Listen to local store events simulating real-time updates
-    const handleStoreChange = () => {
-      reloadNotifications();
-    };
+    if (!user) return;
 
-    window.addEventListener('mh_local_store_change', handleStoreChange);
-    window.addEventListener('mh_auth_change', handleStoreChange);
+    const uniqueChannelName = `notifikasi:${user.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const channel = supabase
+      .channel(uniqueChannelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifikasi', filter: `user_id=eq.${user.id}` },
+        () => reloadNotifications()
+      )
+      .subscribe();
 
     return () => {
-      window.removeEventListener('mh_local_store_change', handleStoreChange);
-      window.removeEventListener('mh_auth_change', handleStoreChange);
+      supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     if (!user) return;
-    const all = dbLocal.getNotifikasi();
-    const updated = all.map(n => n.user_id === user.id ? { ...n, is_read: true } : n);
-    dbLocal.setNotifikasi(updated);
+    const { error } = await supabase
+      .from('notifikasi')
+      .update({ is_read: true })
+      .eq('user_id', user.id);
+    if (error) console.error('[Supabase Notifikasi Update Failure]', error);
+    await reloadNotifications();
   };
 
-  const markAsRead = (id: string) => {
-    const all = dbLocal.getNotifikasi();
-    const updated = all.map(n => n.id === id ? { ...n, is_read: true } : n);
-    dbLocal.setNotifikasi(updated);
+  const markAsRead = async (id: string) => {
+    const { error } = await supabase
+      .from('notifikasi')
+      .update({ is_read: true })
+      .eq('id', id);
+    if (error) console.error('[Supabase Notifikasi Update Failure]', error);
+    await reloadNotifications();
   };
 
   return {

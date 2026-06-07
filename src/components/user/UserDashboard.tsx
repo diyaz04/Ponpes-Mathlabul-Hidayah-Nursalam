@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
-import { dbLocal } from '../../lib/supabase';
+import { dbLocal, isRealSupabaseConfigured, supabase } from '../../lib/supabase';
 import { Santri, Pelanggaran, SetoranHapalan, ProgressHapalan, Tagihan, Pembayaran, KategoriHapalan } from '../../types';
 import { PelanggaranBadge } from '../shared/PelanggaranBadge';
 import { HapalanProgressCard } from '../shared/HapalanProgressCard';
@@ -94,7 +94,7 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
   // Sync state reactively to database events
   useRealtime(() => {
     setDbTick(prev => prev + 1);
-  });
+  }, ['santri', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'progress_hapalan', 'tagihan', 'pembayaran', 'notifikasi']);
 
   // Load and load-bind all kids and active kid's records
   React.useEffect(() => {
@@ -133,16 +133,59 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
       const currentProg = allProg.find(p => p.santri_id === activeS.id) || null;
       setProgress(currentProg);
 
-      // Query Bills
-      const allBills = dbLocal.getTagihan();
-      const currentBills = allBills.filter(b => b.santri_id === activeS.id);
-      setBills(currentBills);
+      const loadBillingData = async () => {
+        if (isRealSupabaseConfigured && supabase) {
+          const { data: billData, error: billError } = await supabase
+            .from('tagihan')
+            .select('id, santri_id, jenis_id, bulan, tahun, nominal, status, created_at')
+            .eq('santri_id', activeS.id)
+            .order('created_at', { ascending: false });
 
-      // Query Payments
-      const allPay = dbLocal.getPembayaran();
-      const billingIds = currentBills.map(b => b.id);
-      const currentPay = allPay.filter(p => billingIds.includes(p.tagihan_id));
-      setPayments(currentPay);
+          if (billError) {
+            setErrorMsg(`Gagal memuat tagihan Supabase: ${billError.message}`);
+            setBills([]);
+            setPayments([]);
+            return;
+          }
+
+          const currentBills = (billData || []) as Tagihan[];
+          setBills(currentBills);
+
+          const billingIds = currentBills.map(b => b.id);
+          if (billingIds.length === 0) {
+            setPayments([]);
+            return;
+          }
+
+          const { data: paymentData, error: paymentError } = await supabase
+            .from('pembayaran')
+            .select('id, tagihan_id, order_id, snap_token, metode, nominal, status, paid_at, created_at, updated_at')
+            .in('tagihan_id', billingIds)
+            .order('created_at', { ascending: false });
+
+          if (paymentError) {
+            setErrorMsg(`Gagal memuat pembayaran Supabase: ${paymentError.message}`);
+            setPayments([]);
+            return;
+          }
+
+          setPayments((paymentData || []) as Pembayaran[]);
+          return;
+        }
+
+        // Query Bills
+        const allBills = dbLocal.getTagihan();
+        const currentBills = allBills.filter(b => b.santri_id === activeS.id);
+        setBills(currentBills);
+
+        // Query Payments
+        const allPay = dbLocal.getPembayaran();
+        const billingIds = currentBills.map(b => b.id);
+        const currentPay = allPay.filter(p => billingIds.includes(p.tagihan_id));
+        setPayments(currentPay);
+      };
+
+      loadBillingData();
     } else {
       setSelectedSantri(null);
     }
@@ -213,6 +256,27 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
       return p;
     });
 
+    // Sync to Supabase profiles table
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        full_name: profileName.trim(),
+        phone: profilePhone.trim(),
+        avatar_url: selectedAvatar
+      })
+      .eq('id', user.id);
+
+    if (updateError) {
+      setErrorMsg(`Gagal memperbarui profil: ${updateError.message}`);
+      setTimeout(() => setErrorMsg(null), 5000);
+      return;
+    }
+
+    // Update password in Supabase Auth if changed
+    if (finalPassword !== (user.password || '123456')) {
+      await supabase.auth.updateUser({ password: finalPassword }).catch(() => undefined);
+    }
+
     dbLocal.setProfiles(updatedProfiles);
     setSuccessMsg('🎉 Berhasil! Profil, foto profil, dan kata sandi akses Anda diperbarui secara aman.');
     
@@ -223,7 +287,6 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
 
     // Trigger state sync across system components
     window.dispatchEvent(new Event('mh_auth_change'));
-    window.dispatchEvent(new Event('mh_local_store_change'));
 
     setTimeout(() => {
       setSuccessMsg(null);
@@ -592,8 +655,7 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
                             <MidtransButton 
                               tagihan={pendingBill}
                               studentName={selectedSantri.nama}
-                              parentEmail={user.email || ''}
-                              onPaymentSuccess={() => {}}
+                              onPaymentSuccess={() => setDbTick(prev => prev + 1)}
                             />
                           </>
                         ) : (
@@ -1007,8 +1069,7 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
                           <MidtransButton 
                             tagihan={bill} 
                             studentName={selectedSantri.nama} 
-                            parentEmail={user?.email || 'ortu@mail.com'} 
-                            onPaymentSuccess={() => {}}
+                            onPaymentSuccess={() => setDbTick(prev => prev + 1)}
                           />
                         </div>
                       </div>

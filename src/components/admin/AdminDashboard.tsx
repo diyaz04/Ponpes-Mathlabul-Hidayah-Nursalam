@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
-import { dbLocal, supabase, isRealSupabaseConfigured } from '../../lib/supabase';
+import { db, dbLocal, insertNotification, isRealSupabaseConfigured, supabase } from '../../lib/supabase';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -222,20 +222,48 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [adminSelectedWaliId, setAdminSelectedWaliId] = useState('p-wali1');
   const [adminLinkNis, setAdminLinkNis] = useState('');
 
-  useRealtime(() => {
-    setSantriList(dbLocal.getSantri());
-    setProfilesList(dbLocal.getProfiles());
-    setJPembayaranList(dbLocal.getJenisPembayaran());
-    setBills(dbLocal.getTagihan());
-    setPayments(dbLocal.getPembayaran());
-    setBeritaList(dbLocal.getBerita());
-    setAnnouncements(dbLocal.getPengumuman());
-    setViolationsList(dbLocal.getPelanggaran());
-    setHapalanList(dbLocal.getSetoranHapalan());
-    setHapKategoriList(dbLocal.getKategoriHapalan());
-    setVJenisList(dbLocal.getJenisPelanggaran());
-    
-    const pp = dbLocal.getProfilPesantren();
+  const refreshAdminData = async () => {
+    try {
+      const [
+        santri,
+        profiles,
+        jenisPembayaran,
+        tagihan,
+        pembayaran,
+        berita,
+        pengumuman,
+        pelanggaran,
+        setoranHapalan,
+        kategoriHapalan,
+        jenisPelanggaran,
+        pp
+      ] = await Promise.all([
+        db.santri(),
+        db.profiles(),
+        db.jenisPembayaran(),
+        db.tagihan(),
+        db.pembayaran(),
+        db.berita(),
+        db.pengumuman(),
+        db.pelanggaran(),
+        db.setoranHapalan(),
+        db.kategoriHapalan(),
+        db.jenisPelanggaran(),
+        db.profilPesantren()
+      ]);
+
+      setSantriList(santri);
+      setProfilesList(profiles);
+      setJPembayaranList(jenisPembayaran);
+      setBills(tagihan);
+      setPayments(pembayaran);
+      setBeritaList(berita);
+      setAnnouncements(pengumuman);
+      setViolationsList(pelanggaran);
+      setHapalanList(setoranHapalan);
+      setHapKategoriList(kategoriHapalan);
+      setVJenisList(jenisPelanggaran);
+
     setProfilPP(pp);
     if (pp) {
       setCmsModelNama(pp.nama);
@@ -265,7 +293,17 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setFacilitiesJson(pp.facilities_json || '');
       setTestimonialsJson(pp.testimonials_json || '');
     }
-  });
+    } catch (error: any) {
+      console.error('[Supabase Admin Load Failure]', error);
+      setActionDoneMsg(`Gagal memuat data Supabase: ${error.message || error}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
+  };
+
+  useRealtime(
+    refreshAdminData,
+    ['profiles', 'santri', 'jenis_pembayaran', 'tagihan', 'pembayaran', 'berita', 'pengumuman', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'jenis_pelanggaran', 'profil_pesantren']
+  );
 
   const getWaliName = (id?: string) => {
     return profilesList.find(p => p.id === id)?.full_name || 'Tidak ada wali';
@@ -310,116 +348,115 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     setShowPupilModal(true);
   };
 
-  const handleSavePupil = (e: React.FormEvent) => {
+  const handleSavePupil = async (e: React.FormEvent) => {
     e.preventDefault();
-    const students = dbLocal.getSantri();
-    let finalWaliId = pWaliId;
+    const finalWaliId = pWaliId;
 
-    if (pWaliId === '__buat_baru__') {
-      const generatedWaliId = `p-wali-created-${Date.now()}`;
-      const newParentProfile: Profile = {
-        id: generatedWaliId,
-        role: 'user',
-        full_name: newWaliFullName || `Wali dari ${pNama}`,
-        phone: newWaliPhone || `0851${Math.floor(10000000 + Math.random() * 90000000)}`,
-        email: newWaliEmail || `${pNama.toLowerCase().replace(/\s+/g, '')}@pesantren.com`,
-        password: newWaliPassword || '123456',
-        is_active: true,
-        created_at: new Date().toISOString()
-      };
+    try {
+      if (pWaliId === '__buat_baru__' && !newWaliEmail.trim()) {
+        alert('Email wali wajib diisi agar akun Supabase Auth dapat dibuat.');
+        return;
+      }
 
-      const allProfiles = dbLocal.getProfiles();
-      dbLocal.setProfiles([...allProfiles, newParentProfile]);
-      setProfilesList([...allProfiles, newParentProfile]);
-      finalWaliId = generatedWaliId;
-    }
-    
-    if (pupilId) {
-      // Edit
-      const updated = students.map(s => {
-        if (s.id === pupilId) {
-          return {
-            ...s,
+      if (!pupilId && pWaliId === '__buat_baru__') {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const response = await fetch('/api/admin/wali/create-with-santri-auth', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sessionData.session?.access_token || ''}`
+          },
+          body: JSON.stringify({
+            wali: {
+              full_name: newWaliFullName || `Wali dari ${pNama}`,
+              phone: newWaliPhone,
+              email: newWaliEmail.trim().toLowerCase(),
+              password: newWaliPassword || '123456'
+            },
+            santri: {
+              nis: pNis,
+              nama: pNama,
+              kelas: pKelas,
+              kamar: pKamar,
+              jenis_kelamin: pJK,
+              tanggal_lahir: pBirth,
+              alamat: pAlamat,
+              status: 'aktif',
+              tahun_masuk: pTahunMasuk,
+              bulan_masuk: pBulanMasuk
+            }
+          })
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Gagal membuat wali dan santri.');
+        }
+
+        setActionDoneMsg('Santri baru berhasil didaftarkan dan akun Supabase Auth wali otomatis terbuat!');
+        await refreshAdminData();
+        setTimeout(() => setActionDoneMsg(null), 5000);
+        setShowPupilModal(false);
+        return;
+      }
+
+      if (pupilId) {
+        const { error } = await supabase
+          .from('santri')
+          .update({
             nis: pNis,
             nama: pNama,
             kelas: pKelas,
-            kamar: pKamar,
+            kamar: pKamar || null,
             jenis_kelamin: pJK,
             tanggal_lahir: pBirth,
-            alamat: pAlamat,
-            wali_id: finalWaliId,
+            alamat: pAlamat || null,
+            wali_id: finalWaliId === '__buat_baru__' ? null : finalWaliId,
             bulan_masuk: pBulanMasuk,
             tahun_masuk: pTahunMasuk
-          };
-        }
-        return s;
-      });
-      dbLocal.setSantri(updated);
-      setActionDoneMsg('✅ Data santri berhasil diperbaharui!');
-    } else {
-      // Create
-      const newS: Santri = {
-        id: `s-santri-${Date.now()}`,
-        nis: pNis,
-        nama: pNama,
-        kelas: pKelas,
-        kamar: pKamar,
-        jenis_kelamin: pJK,
-        tanggal_lahir: pBirth,
-        alamat: pAlamat,
-        wali_id: finalWaliId,
-        status: 'aktif',
-        tahun_masuk: pTahunMasuk,
-        bulan_masuk: pBulanMasuk
-      };
-      dbLocal.setSantri([...students, newS]);
-
-      // Auto-generate outstanding / already active bills for this student's month of entry
-      const existingBills = dbLocal.getTagihan();
-      const targetMonth = pBulanMasuk || 'Juni';
-      const targetYear = pTahunMasuk || '2026';
-      
-      const matchingBills = existingBills.filter(b => 
-        b.bulan.toLowerCase() === targetMonth.toLowerCase() && 
-        String(b.tahun) === String(targetYear)
-      );
-
-      // Find unique combination of (jenis_id, nominal)
-      const uniqueCombos: { jenis_id: string; nominal: number }[] = [];
-      matchingBills.forEach(b => {
-        const exists = uniqueCombos.some(u => u.jenis_id === b.jenis_id);
-        if (!exists) {
-          uniqueCombos.push({ jenis_id: b.jenis_id, nominal: b.nominal });
-        }
-      });
-
-      if (uniqueCombos.length > 0) {
-        const batchData = uniqueCombos.map(combo => ({
-          santri_id: newS.id,
-          jenis_id: combo.jenis_id,
-          bulan: targetMonth,
-          tahun: targetYear,
-          nominal: combo.nominal,
-          status: 'pending' as const
-        }));
-        dbLocal.insertTagihanBatch(batchData);
+          })
+          .eq('id', pupilId);
+        if (error) throw error;
+        setActionDoneMsg('Data santri berhasil diperbaharui!');
+      } else {
+        const { error } = await supabase.from('santri').insert({
+          nis: pNis,
+          nama: pNama,
+          kelas: pKelas,
+          kamar: pKamar || null,
+          jenis_kelamin: pJK,
+          tanggal_lahir: pBirth,
+          alamat: pAlamat || null,
+          wali_id: finalWaliId,
+          status: 'aktif',
+          tahun_masuk: pTahunMasuk,
+          bulan_masuk: pBulanMasuk
+        });
+        if (error) throw error;
+        setActionDoneMsg('Santri baru berhasil didaftarkan di Supabase!');
       }
 
-      setActionDoneMsg('✅ Santri baru berhasil didaftarkan dan akun Wali & Tagihan otomatis terbuat!');
+      await refreshAdminData();
+      setTimeout(() => setActionDoneMsg(null), 3000);
+      setShowPupilModal(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setActionDoneMsg(`Gagal menyimpan santri: ${message}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
     }
-
-    setTimeout(() => setActionDoneMsg(null), 3000);
-    setShowPupilModal(false);
   };
-
   const handleDeletePupil = (id: string) => {
     triggerConfirm(
       'Hapus Data Santri',
       'Yakin ingin menghapus data santri ini secara permanen dari sistem? Ini juga akan menghapus semua tagihan & laporan terkait.',
-      () => {
-        const list = dbLocal.getSantri();
-        dbLocal.setSantri(list.filter(s => s.id !== id));
-        setActionDoneMsg('🚨 Santri dihapus secara permanen.');
+      async () => {
+        const { error } = await supabase.from('santri').delete().eq('id', id);
+        if (error) {
+          setActionDoneMsg(`Gagal menghapus santri: ${error.message}`);
+        } else {
+          setActionDoneMsg('Santri dihapus secara permanen.');
+          await refreshAdminData();
+        }
         setTimeout(() => setActionDoneMsg(null), 3000);
       }
     );
@@ -573,160 +610,145 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     triggerConfirm(
       'Konfirmasi Import Data Santri & Wali',
       `Apakah Anda yakin ingin memproses dan mengimpor ${importRowsPreview.length} data santri? Sistem juga akan secara otomatis membuat akun login bagi wali/orangtua masing-masing santri baru tersebut secara instan.`,
-      () => {
-        const currentSantri = dbLocal.getSantri();
-        const currentProfiles = dbLocal.getProfiles();
+      async () => {
+        setActionDoneMsg('⏳ Sedang memproses import... Harap tunggu.');
 
-        const newSantriList: Santri[] = [...currentSantri];
-        const newProfilesList: Profile[] = [...currentProfiles];
+        const currentSantri = dbLocal.getSantri();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token || '';
 
         let createdStudentCount = 0;
         let createdWaliCount = 0;
+        let createdBillCount = 0;
+        const errors: string[] = [];
 
-        const normalizePhone = (phoneStr: string) => {
-          let clean = phoneStr.replace(/\D/g, '');
-          if (clean.startsWith('62')) {
-            clean = '0' + clean.slice(2);
-          }
-          if (clean && !clean.startsWith('0')) {
-            clean = '0' + clean;
-          }
-          return clean;
-        };
+        for (const row of importRowsPreview) {
+          // Skip duplicate NIS
+          if (currentSantri.some(s => s.nis === row.nis)) continue;
 
-        importRowsPreview.forEach(row => {
-          // Check if student with same NIS already exists
-          const existsStudent = currentSantri.some(s => s.nis === row.nis);
-          if (existsStudent) {
-            return; // Skip duplicate NIS
-          }
-
-          // Check if parent account with same phone AND similar name already exists
-          const cleanRowPhone = normalizePhone(row.waliPhone);
-          const cleanRowWaliName = row.waliNama.toLowerCase().replace(/[^a-z0-9]/g, '');
-          let matchedWali = null;
-          
-          if (cleanRowPhone && cleanRowWaliName) {
-            matchedWali = newProfilesList.find(p => {
-              if (p.role !== 'user' || !p.phone) return false;
-              
-              const cleanProfilePhone = normalizePhone(p.phone);
-              const cleanProfileName = p.full_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-              
-              // It is a match ONLY if both phone numbers match and the names are similar
-              const phoneMatches = (cleanProfilePhone === cleanRowPhone);
-              const nameMatches = (cleanProfileName.includes(cleanRowWaliName) || cleanRowWaliName.includes(cleanProfileName));
-              
-              return phoneMatches && nameMatches;
+          try {
+            // Reuse the existing server endpoint that properly creates Supabase Auth + profile + santri
+            const response = await fetch('/api/admin/wali/create-with-santri-auth', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                wali: {
+                  full_name: row.waliNama,
+                  phone: row.waliPhone,
+                  email: row.waliEmail.trim().toLowerCase(),
+                  password: row.waliPassword || '123456'
+                },
+                santri: {
+                  nis: row.nis,
+                  nama: row.nama,
+                  kelas: row.kelas,
+                  kamar: row.kamar || null,
+                  jenis_kelamin: row.jk,
+                  tanggal_lahir: row.birth,
+                  alamat: row.alamat || null,
+                  status: 'aktif',
+                  tahun_masuk: row.tahunMasuk,
+                  bulan_masuk: row.bulanMasuk
+                }
+              })
             });
-          }
 
-          let assignedWaliId = '';
+            const result = await response.json();
 
-          if (matchedWali) {
-            assignedWaliId = matchedWali.id;
-          } else {
-            // Check for phone number collision with another unrelated parent profile
-            let finalPhone = row.waliPhone;
-            if (cleanRowPhone) {
-              const isPhoneTaken = newProfilesList.some(p => p.role === 'user' && p.phone && normalizePhone(p.phone) === cleanRowPhone);
-              if (isPhoneTaken) {
-                // Suffix a random digit so the login phone is unique
-                finalPhone = `${row.waliPhone}-${Math.floor(1 + Math.random() * 9)}`;
+            if (!response.ok) {
+              // If wali email already exists (duplicate), try inserting santri only with existing wali
+              if (response.status === 409 || (result.error || '').toLowerCase().includes('already')) {
+                // Find existing wali by email from current profiles cache
+                const existingWali = dbLocal.getProfiles().find(
+                  p => p.email?.toLowerCase() === row.waliEmail.trim().toLowerCase()
+                );
+                if (existingWali) {
+                  const { error: santriErr } = await supabase.from('santri').insert({
+                    nis: row.nis,
+                    nama: row.nama,
+                    kelas: row.kelas,
+                    kamar: row.kamar || null,
+                    jenis_kelamin: row.jk,
+                    tanggal_lahir: row.birth,
+                    alamat: row.alamat || null,
+                    wali_id: existingWali.id,
+                    status: 'aktif',
+                    tahun_masuk: row.tahunMasuk,
+                    bulan_masuk: row.bulanMasuk
+                  });
+                  if (!santriErr) {
+                    createdStudentCount++;
+                  } else {
+                    errors.push(`${row.nama}: ${santriErr.message}`);
+                  }
+                } else {
+                  errors.push(`${row.nama}: ${result.error}`);
+                }
+              } else {
+                errors.push(`${row.nama}: ${result.error}`);
+              }
+              continue;
+            }
+
+            createdStudentCount++;
+            createdWaliCount++;
+
+            // Auto-generate bills for month of entry
+            const newSantriId = result.santri?.id;
+            if (newSantriId) {
+              const existingBills = dbLocal.getTagihan();
+              const targetMonth = row.bulanMasuk || 'Juni';
+              const targetYear = row.tahunMasuk || '2026';
+
+              const matchingBills = existingBills.filter(b =>
+                b.bulan.toLowerCase() === targetMonth.toLowerCase() &&
+                String(b.tahun) === String(targetYear)
+              );
+
+              const uniqueCombos: { jenis_id: string; nominal: number }[] = [];
+              matchingBills.forEach(b => {
+                if (!uniqueCombos.some(u => u.jenis_id === b.jenis_id)) {
+                  uniqueCombos.push({ jenis_id: b.jenis_id, nominal: b.nominal });
+                }
+              });
+
+              if (uniqueCombos.length > 0) {
+                try {
+                  const newBills = await dbLocal.insertTagihanBatch(
+                    uniqueCombos.map(combo => ({
+                      santri_id: newSantriId,
+                      jenis_id: combo.jenis_id,
+                      bulan: targetMonth,
+                      tahun: targetYear,
+                      nominal: combo.nominal,
+                      status: 'pending' as const
+                    }))
+                  );
+                  createdBillCount += newBills.length;
+                } catch (_billErr) {
+                  // Bill generation failure is non-fatal
+                }
               }
             }
-
-            // Generate unique parent account id
-            assignedWaliId = `p-wali-imported-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-            const newParent: Profile = {
-              id: assignedWaliId,
-              role: 'user',
-              full_name: row.waliNama,
-              phone: finalPhone,
-              email: row.waliEmail,
-              password: row.waliPassword,
-              is_active: true,
-              created_at: new Date().toISOString()
-            };
-            newProfilesList.push(newParent);
-            createdWaliCount++;
+          } catch (err: any) {
+            errors.push(`${row.nama}: ${err.message || err}`);
           }
-
-          // Create new Santri record
-          const newStudent: Santri = {
-            id: `s-santri-imported-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
-            nis: row.nis,
-            nama: row.nama,
-            kelas: row.kelas,
-            kamar: row.kamar,
-            jenis_kelamin: row.jk,
-            tanggal_lahir: row.birth,
-            alamat: row.alamat,
-            wali_id: assignedWaliId,
-            status: 'aktif',
-            bulan_masuk: row.bulanMasuk,
-            tahun_masuk: row.tahunMasuk
-          };
-
-          newSantriList.push(newStudent);
-          createdStudentCount++;
-        });
-
-        // Save
-        dbLocal.setSantri(newSantriList);
-        dbLocal.setProfiles(newProfilesList);
-
-        // Auto-generate outstanding / already active bills for these imported students' month of entry
-        const existingBills = dbLocal.getTagihan();
-        const newlyAddedStudents = newSantriList.filter(ns => !currentSantri.some(cs => cs.id === ns.id));
-        let batchDataForImported: any[] = [];
-        
-        newlyAddedStudents.forEach(ns => {
-          const targetMonth = ns.bulan_masuk || 'Juni';
-          const targetYear = ns.tahun_masuk || '2026';
-          
-          const matchingBills = existingBills.filter(b => 
-            b.bulan.toLowerCase() === targetMonth.toLowerCase() && 
-            String(b.tahun) === String(targetYear)
-          );
-
-          const uniqueCombos: { jenis_id: string; nominal: number }[] = [];
-          matchingBills.forEach(b => {
-            const exists = uniqueCombos.some(u => u.jenis_id === b.jenis_id);
-            if (!exists) {
-              uniqueCombos.push({ jenis_id: b.jenis_id, nominal: b.nominal });
-            }
-          });
-
-          uniqueCombos.forEach(combo => {
-            batchDataForImported.push({
-              santri_id: ns.id,
-              jenis_id: combo.jenis_id,
-              bulan: targetMonth,
-              tahun: targetYear,
-              nominal: combo.nominal,
-              status: 'pending' as const
-            });
-          });
-        });
-
-        let createdBillCount = 0;
-        if (batchDataForImported.length > 0) {
-          const newBills = dbLocal.insertTagihanBatch(batchDataForImported);
-          createdBillCount = newBills.length;
         }
 
-        // Sync local states
-        setSantriList(newSantriList);
-        setProfilesList(newProfilesList);
+        // Refresh data from Supabase
+        await refreshAdminData();
 
         // Clean up import states
         setImportRowsPreview([]);
         setImportSelectedFileName('');
         setShowImportForm(false);
 
-        setActionDoneMsg(`🎉 Sukses mengimpor ${createdStudentCount} santri baru, meregistrasi ${createdWaliCount} akun wali baru & menyusun ${createdBillCount} tagihan otomatis!`);
-        setTimeout(() => setActionDoneMsg(null), 5000);
+        const errSuffix = errors.length > 0 ? ` | ⚠️ ${errors.length} gagal: ${errors.slice(0, 3).join('; ')}` : '';
+        setActionDoneMsg(`🎉 Sukses mengimpor ${createdStudentCount} santri baru, meregistrasi ${createdWaliCount} akun wali baru & menyusun ${createdBillCount} tagihan otomatis!${errSuffix}`);
+        setTimeout(() => setActionDoneMsg(null), 8000);
       }
     );
   };
@@ -794,7 +816,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       targetScope === 'santri'
         ? `Apakah Anda yakin ingin men-generate tagihan khusus [${getJenisName(selJenisId)}] periode ${selBulan} ${selTahun} sebesar Rp ${selNominal.toLocaleString('id-ID')} hanya untuk santri "${eligibleStudents[0].nama}"?`
         : `Apakah Anda yakin ingin men-generate tagihan bulk [${getJenisName(selJenisId)}] periode ${selBulan} ${selTahun} sebesar Rp ${selNominal.toLocaleString('id-ID')} untuk ${eligibleStudents.length} santri aktif?${skippedCount > 0 ? ` (${skippedCount} santri akan dilewati karena belum masuk pada bulan tersebut).` : ''}`,
-      () => {
+      async () => {
         const batchData = eligibleStudents.map(s => ({
           santri_id: s.id,
           jenis_id: selJenisId,
@@ -804,61 +826,68 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           status: 'pending' as const
         }));
 
-        const newCreated = dbLocal.insertTagihanBatch(batchData);
-        
-        // Force update the local dashboard state
-        const updatedBills = dbLocal.getTagihan();
-        setBills(updatedBills);
+        try {
+          const newCreated = await dbLocal.insertTagihanBatch(batchData);
+          
+          // Refresh from Supabase
+          await refreshAdminData();
 
-        setActionDoneMsg(
-          targetScope === 'santri'
-            ? `✅ Sukses memproses tagihan khusus untuk ${eligibleStudents[0].nama}!`
-            : `✅ Sukses memproses ${newCreated.length} tagihan baru!${skippedCount > 0 ? ` (${skippedCount} santri dilewati otomatis)` : ''}`
-        );
-        setTimeout(() => setActionDoneMsg(null), 5000);
+          setActionDoneMsg(
+            targetScope === 'santri'
+              ? `✅ Sukses memproses tagihan khusus untuk ${eligibleStudents[0].nama}!`
+              : `✅ Sukses memproses ${newCreated.length} tagihan baru!${skippedCount > 0 ? ` (${skippedCount} santri dilewati otomatis)` : ''}`
+          );
+          setTimeout(() => setActionDoneMsg(null), 5000);
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal membuat tagihan: ${err.message || err}`);
+          setTimeout(() => setActionDoneMsg(null), 5000);
+        }
       }
     );
   };
 
-  const handlePostAnnouncement = (e: React.FormEvent) => {
+  const handlePostAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!annJudul || !annPesan) return;
 
-    const list = dbLocal.getPengumuman();
-    const newAnn: Pengumuman = {
-      id: `ann-${Date.now()}`,
-      judul: annJudul,
-      pesan: annPesan,
-      target: annTarget,
-      target_value: annTargetVal || 'semua',
-      created_by: 'p-admin',
-      created_at: new Date().toISOString()
-    };
-
-    dbLocal.setPengumuman([newAnn, ...list]);
-
-    // Send notifications to everyone
-    const walis = profilesList.filter(p => p.role === 'user');
-    walis.forEach(w => {
-      dbLocal.insertNotification({
-        user_id: w.id,
-        judul: `Pengumuman: ${annJudul}`,
+    try {
+      const { error: annError } = await supabase.from('pengumuman').insert({
+        judul: annJudul,
         pesan: annPesan,
-        tipe: 'pengumuman',
-        is_read: false
+        target: annTarget,
+        target_value: annTargetVal || 'semua',
+        created_by: user?.id || null
       });
-    });
 
-    setActionDoneMsg('✅ Pengumuman diposting & disiarkan silang-notifikasi gratis!');
-    setTimeout(() => setActionDoneMsg(null), 3000);
+      if (annError) throw annError;
 
-    setAnnJudul('');
-    setAnnPesan('');
-    setAnnTargetVal('');
+      // Send notifications to everyone
+      const walis = profilesList.filter(p => p.role === 'user');
+      for (const w of walis) {
+        await dbLocal.insertNotification({
+          user_id: w.id,
+          judul: `Pengumuman: ${annJudul}`,
+          pesan: annPesan,
+          tipe: 'pengumuman',
+          is_read: false
+        });
+      }
+
+      await refreshAdminData();
+      setActionDoneMsg('✅ Pengumuman diposting & disiarkan silang-notifikasi gratis!');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+
+      setAnnJudul('');
+      setAnnPesan('');
+      setAnnTargetVal('');
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal posting pengumuman: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
   };
 
   // 1. Create customized Jenis Pembayaran billing category
-  const handleCreateJenisPembayaran = (e: React.FormEvent) => {
+  const handleCreateJenisPembayaran = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newJenisNama.trim()) {
       alert('Nama jenis iuran tidak boleh kosong!');
@@ -870,19 +899,22 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       alert('Jenis pembayaran / iuran dengan nama ini sudah ada!');
       return;
     }
-    const newRecord: JenisPembayaran = {
-      id: `pay-${Date.now()}`,
-      nama: newJenisNama.trim(),
-      deskripsi: newJenisDeskripsi.trim() || undefined,
-      is_active: true
-    };
-    const updated = [...list, newRecord];
-    dbLocal.setJenisPembayaran(updated);
-    setJPembayaranList(updated);
-    setNewJenisNama('');
-    setNewJenisDeskripsi('');
-    setActionDoneMsg('✅ Sukses menambahkan kategori iuran baru!');
-    setTimeout(() => setActionDoneMsg(null), 3000);
+    try {
+      const { error } = await supabase.from('jenis_pembayaran').insert({
+        nama: newJenisNama.trim(),
+        deskripsi: newJenisDeskripsi.trim() || null,
+        is_active: true
+      });
+      if (error) throw error;
+      await refreshAdminData();
+      setNewJenisNama('');
+      setNewJenisDeskripsi('');
+      setActionDoneMsg('✅ Sukses menambahkan kategori iuran baru!');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal menambahkan jenis pembayaran: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
   };
 
   // 2. Delete existing Jenis Pembayaran billing category
@@ -890,12 +922,15 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     triggerConfirm(
       'Hapus Kategori Iuran',
       'Apakah Anda yakin ingin menghapus kategori iuran ini?',
-      () => {
-        const list = dbLocal.getJenisPembayaran();
-        const updated = list.filter(j => j.id !== id);
-        dbLocal.setJenisPembayaran(updated);
-        setJPembayaranList(updated);
-        setActionDoneMsg('🚨 Kategori iuran berhasil dihapus dari sistem.');
+      async () => {
+        try {
+          const { error } = await supabase.from('jenis_pembayaran').delete().eq('id', id);
+          if (error) throw error;
+          await refreshAdminData();
+          setActionDoneMsg('🚨 Kategori iuran berhasil dihapus dari sistem.');
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal menghapus: ${err.message || err}`);
+        }
         setTimeout(() => setActionDoneMsg(null), 3000);
       }
     );
@@ -906,19 +941,17 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     triggerConfirm(
       'Hapus / Batalkan Tagihan',
       'Apakah Anda yakin ingin menarik kembali/membatalkan tagihan aktif ini? Hal ini juga akan menghapus data riwayat transaksi pembayaran jika ada.',
-      () => {
-        const list = dbLocal.getTagihan();
-        const updated = list.filter(t => t.id !== id);
-        dbLocal.setTagihan(updated);
-        setBills(updated);
-        
-        // Also delete associated payments if any
-        const pList = dbLocal.getPembayaran();
-        const filteredP = pList.filter(p => p.tagihan_id !== id);
-        dbLocal.setPembayaran(filteredP);
-        setPayments(filteredP);
-        
-        setActionDoneMsg('🚨 Tagihan berhasil ditarik kembali/dibatalkan dari server pesantren.');
+      async () => {
+        try {
+          // Delete associated payments first
+          await supabase.from('pembayaran').delete().eq('tagihan_id', id);
+          const { error } = await supabase.from('tagihan').delete().eq('id', id);
+          if (error) throw error;
+          await refreshAdminData();
+          setActionDoneMsg('🚨 Tagihan berhasil ditarik kembali/dibatalkan dari server pesantren.');
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal menghapus tagihan: ${err.message || err}`);
+        }
         setTimeout(() => setActionDoneMsg(null), 3000);
       }
     );
@@ -961,20 +994,18 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     triggerConfirm(
       'Konfirmasi Tarik / Batalkan Massal',
       `Apakah Anda yakin ingin MENARIK KEMBALI & MEMBATALKAN seluruh ${filteredPending.length} tagihan pending (belum dibayar) yang terpilih sesuai filter? Tagihan-tagihan ini akan secara otomatis terhapus dari tagihan berjalan santri & wali.`,
-      () => {
-        const list = dbLocal.getTagihan();
-        const excludeIds = new Set(filteredPending.map(f => f.id));
-        const updated = list.filter(t => !excludeIds.has(t.id));
-        dbLocal.setTagihan(updated);
-        setBills(updated);
-
-        // Also clean up pending payments for these tagihans if any exists
-        const pList = dbLocal.getPembayaran();
-        const filteredP = pList.filter(p => !excludeIds.has(p.tagihan_id));
-        dbLocal.setPembayaran(filteredP);
-        setPayments(filteredP);
-
-        setActionDoneMsg(`🚨 Berhasil menarik/membatalkan ${filteredPending.length} tagihan pending massal!`);
+      async () => {
+        try {
+          const excludeIds = filteredPending.map(f => f.id);
+          // Delete associated payments first
+          await supabase.from('pembayaran').delete().in('tagihan_id', excludeIds);
+          const { error } = await supabase.from('tagihan').delete().in('id', excludeIds);
+          if (error) throw error;
+          await refreshAdminData();
+          setActionDoneMsg(`🚨 Berhasil menarik/membatalkan ${filteredPending.length} tagihan pending massal!`);
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal: ${err.message || err}`);
+        }
         setTimeout(() => setActionDoneMsg(null), 4000);
       }
     );
@@ -1014,19 +1045,17 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     triggerConfirm(
       'Konfirmasi Tarik / Batalkan per ID Tagihan',
       `Apakah Anda yakin ingin MENARIK KEMBALI & MEMBATALKAN tagihan tunggal berikut?\n\n• ID Invoice: ${matched.id}\n• Nama Santri: ${labelS}\n• Kategori Iuran: ${jName}\n• Periode Tagihan: ${matched.bulan} ${matched.tahun}\n• Jumlah Nominal: Rp ${matched.nominal.toLocaleString('id-ID')}\n• Status Iuran: ${matched.status.toUpperCase()}\n\nTindakan ini bersifat permanen dan tagihan akan ditarik dari portal wali santri.`,
-      () => {
-        const updated = tList.filter(t => t.id !== matched.id);
-        dbLocal.setTagihan(updated);
-        setBills(updated);
-
-        // Also clean up associated payment records if present
-        const pList = dbLocal.getPembayaran();
-        const filteredP = pList.filter(p => p.tagihan_id !== matched.id);
-        dbLocal.setPembayaran(filteredP);
-        setPayments(filteredP);
-
-        setCancelTargetId('');
-        setActionDoneMsg(`🚨 Berhasil menarik tagihan ID #${matched.id.substring(4,10)}.. (${jName}) milik ${sComp?.nama || 'santri'}!`);
+      async () => {
+        try {
+          await supabase.from('pembayaran').delete().eq('tagihan_id', matched.id);
+          const { error } = await supabase.from('tagihan').delete().eq('id', matched.id);
+          if (error) throw error;
+          await refreshAdminData();
+          setCancelTargetId('');
+          setActionDoneMsg(`🚨 Berhasil menarik tagihan ID #${matched.id.substring(4,10)}.. (${jName}) milik ${sComp?.nama || 'santri'}!`);
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal: ${err.message || err}`);
+        }
         setTimeout(() => setActionDoneMsg(null), 4000);
       }
     );
@@ -1035,52 +1064,53 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   // 2c. Manually settle (Lunas) a tagihan via Cash
   const handleManualSettleCash = (tabId: string) => {
     const tList = dbLocal.getTagihan();
-    const tIdx = tList.findIndex(t => t.id === tabId);
-    if (tIdx >= 0) {
+    const tRecord = tList.find(t => t.id === tabId);
+    if (tRecord) {
       triggerConfirm(
         'Konfirmasi Pembayaran Tunai',
         'Konfirmasi pembayaran tunai (CASH) untuk tagihan ini? Status tagihan akan diubah menjadi LUNAS.',
-        () => {
-          const tRecord = tList[tIdx];
-          tRecord.status = 'lunas';
-          tList[tIdx] = tRecord;
-          dbLocal.setTagihan(tList);
-          setBills(tList);
+        async () => {
+          try {
+            // Update tagihan status
+            const { error: tagihanErr } = await supabase
+              .from('tagihan')
+              .update({ status: 'lunas' })
+              .eq('id', tabId);
+            if (tagihanErr) throw tagihanErr;
 
-          // Create associated successful payment record
-          const pList = dbLocal.getPembayaran();
-          const newPayment: Pembayaran = {
-            id: `pay-manual-${Date.now()}`,
-            tagihan_id: tabId,
-            nominal: tRecord.nominal,
-            status: 'lunas',
-            metode: 'CASH / Tunai (Manual)',
-            order_id: `CSR-${Date.now()}`,
-            created_at: new Date().toISOString(),
-            paid_at: new Date().toISOString(),
-            snap_token: 'manual-settle-token'
-          };
-          dbLocal.setPembayaran([...pList, newPayment]);
-          setPayments([...pList, newPayment]);
-
-          // Insert notification for wali
-          const sList = dbLocal.getSantri();
-          const sInfo = sList.find(s => s.id === tRecord.santri_id);
-          const jList = dbLocal.getJenisPembayaran();
-          const jInfo = jList.find(j => j.id === tRecord.jenis_id);
-          if (sInfo && sInfo.wali_id) {
-            const payName = jInfo ? jInfo.nama : 'Iuran';
-            dbLocal.insertNotification({
-              user_id: sInfo.wali_id,
-              judul: 'Pembayaran Tagihan Terverifikasi',
-              pesan: `Alhamdulillah, pembayaran ${payName} bulan ${tRecord.bulan} ${tRecord.tahun} sebesar Rp ${tRecord.nominal.toLocaleString('id-ID')} untuk ${sInfo.nama} telah diverifikasi lunas secara CASH oleh Admin.`,
-              tipe: 'pembayaran',
-              ref_id: tabId,
-              is_read: false
+            // Insert payment record
+            const orderId = `CSR-${Date.now()}`;
+            const { error: payErr } = await supabase.from('pembayaran').insert({
+              tagihan_id: tabId,
+              nominal: tRecord.nominal,
+              status: 'lunas',
+              metode: 'CASH / Tunai (Manual)',
+              order_id: orderId,
+              paid_at: new Date().toISOString()
             });
-          }
+            if (payErr) throw payErr;
 
-          setActionDoneMsg('✅ Tagihan berhasil ditandai Lunas secara CASH / Tunai!');
+            // Insert notification for wali
+            const sList = dbLocal.getSantri();
+            const sInfo = sList.find(s => s.id === tRecord.santri_id);
+            const jInfo = dbLocal.getJenisPembayaran().find(j => j.id === tRecord.jenis_id);
+            if (sInfo && sInfo.wali_id) {
+              const payName = jInfo ? jInfo.nama : 'Iuran';
+              await dbLocal.insertNotification({
+                user_id: sInfo.wali_id,
+                judul: 'Pembayaran Tagihan Terverifikasi',
+                pesan: `Alhamdulillah, pembayaran ${payName} bulan ${tRecord.bulan} ${tRecord.tahun} sebesar Rp ${tRecord.nominal.toLocaleString('id-ID')} untuk ${sInfo.nama} telah diverifikasi lunas secara CASH oleh Admin.`,
+                tipe: 'pembayaran',
+                ref_id: tabId,
+                is_read: false
+              });
+            }
+
+            await refreshAdminData();
+            setActionDoneMsg('✅ Tagihan berhasil ditandai Lunas secara CASH / Tunai!');
+          } catch (err: any) {
+            setActionDoneMsg(`❌ Gagal: ${err.message || err}`);
+          }
           setTimeout(() => setActionDoneMsg(null), 3000);
         }
       );
@@ -1275,10 +1305,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     setTimeout(() => setActionDoneMsg(null), 4000);
   };
 
-  const handleUpdateCMS = (e: React.FormEvent) => {
+  const handleUpdateCMS = async (e: React.FormEvent) => {
     e.preventDefault();
     if (profilPP) {
-      dbLocal.setProfilPesantren({
+      const updatedPP = {
         ...profilPP,
         nama: cmsModelNama,
         tagline: cmsTagline,
@@ -1308,8 +1338,17 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         testimonials_json: testimonialsJson,
 
         updated_at: new Date().toISOString()
-      });
-      setActionDoneMsg('✅ Pengaturan web pesantren berhasil disimpan.');
+      };
+      try {
+        const { error } = await supabase
+          .from('profil_pesantren')
+          .upsert(updatedPP);
+        if (error) throw error;
+        dbLocal.setProfilPesantren(updatedPP);
+        setActionDoneMsg('✅ Pengaturan web pesantren berhasil disimpan.');
+      } catch (err: any) {
+        setActionDoneMsg(`❌ Gagal menyimpan: ${err.message || err}`);
+      }
       setTimeout(() => setActionDoneMsg(null), 4000);
     }
   };
@@ -1333,69 +1372,62 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     setShowNewsForm(true);
   };
 
-  const handleSaveNews = (e: React.FormEvent) => {
+  const handleSaveNews = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newsJudul.trim() || !newsKonten.trim()) {
       alert('Judul dan konten berita tidak boleh kosong!');
       return;
     }
 
-    const currentBerita = dbLocal.getBerita();
     const createdDate = new Date().toISOString().split('T')[0];
     const generatedSlug = newsJudul
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-');
 
-    if (newsEditId) {
-      const updated = currentBerita.map(b => {
-        if (b.id === newsEditId) {
-          return {
-            ...b,
-            judul: newsJudul,
-            slug: generatedSlug,
-            konten: newsKonten,
-            penulis: newsPenulis,
-            is_published: newsIsPublished,
-            thumbnail_url: newsThumbnailUrl || undefined,
-          };
-        }
-        return b;
-      });
-      dbLocal.setBerita(updated);
-      setBeritaList(updated);
-      setActionDoneMsg('✅ Berita berhasil diperbarui.');
-    } else {
-      const newNews: Berita = {
-        id: 'news-' + Date.now(),
-        judul: newsJudul,
-        slug: generatedSlug,
-        konten: newsKonten,
-        penulis: newsPenulis,
-        tanggal_publish: createdDate,
-        is_published: newsIsPublished,
-        thumbnail_url: newsThumbnailUrl || undefined,
-        created_at: new Date().toISOString()
-      };
-      const updated = [newNews, ...currentBerita];
-      dbLocal.setBerita(updated);
-      setBeritaList(updated);
-      setActionDoneMsg('✅ Berita baru berhasil diterbitkan.');
+    try {
+      if (newsEditId) {
+        const { error } = await supabase.from('berita').update({
+          judul: newsJudul,
+          slug: generatedSlug,
+          konten: newsKonten,
+          penulis: newsPenulis,
+          is_published: newsIsPublished,
+          thumbnail_url: newsThumbnailUrl || null
+        }).eq('id', newsEditId);
+        if (error) throw error;
+        setActionDoneMsg('✅ Berita berhasil diperbarui.');
+      } else {
+        const { error } = await supabase.from('berita').insert({
+          judul: newsJudul,
+          slug: generatedSlug,
+          konten: newsKonten,
+          penulis: newsPenulis,
+          tanggal_publish: createdDate,
+          is_published: newsIsPublished,
+          thumbnail_url: newsThumbnailUrl || null
+        });
+        if (error) throw error;
+        setActionDoneMsg('✅ Berita baru berhasil diterbitkan.');
+      }
+      await refreshAdminData();
+      setShowNewsForm(false);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal menyimpan berita: ${err.message || err}`);
     }
-
-    setShowNewsForm(false);
-    window.dispatchEvent(new Event('mh_local_store_change'));
     setTimeout(() => setActionDoneMsg(null), 4000);
   };
 
-  const handleDeleteNews = (id: string) => {
+  const handleDeleteNews = async (id: string) => {
     if (confirm('Apakah Anda yakin ingin menghapus berita ini?')) {
-      const currentBerita = dbLocal.getBerita();
-      const updated = currentBerita.filter(b => b.id !== id);
-      dbLocal.setBerita(updated);
-      setBeritaList(updated);
-      setActionDoneMsg('❌ Berita berhasil dihapus.');
-      window.dispatchEvent(new Event('mh_local_store_change'));
+      try {
+        const { error } = await supabase.from('berita').delete().eq('id', id);
+        if (error) throw error;
+        await refreshAdminData();
+        setActionDoneMsg('❌ Berita berhasil dihapus.');
+      } catch (err: any) {
+        setActionDoneMsg(`❌ Gagal menghapus: ${err.message || err}`);
+      }
       setTimeout(() => setActionDoneMsg(null), 4000);
     }
   };
@@ -1436,53 +1468,65 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     setShowPelanggaranModal(true);
   };
 
-  const handleSavePelanggaran = (e: React.FormEvent) => {
+  const handleSavePelanggaran = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!petSId || !petJenisId || !petDesc) {
       alert('Harap lengkapi semua kolom!');
       return;
     }
-    dbLocal.insertPelanggaran({
-      santri_id: petSId,
-      guru_id: user?.id || 'p-admin',
-      jenis_id: petJenisId,
-      tanggal: petTanggal,
-      deskripsi: petDesc,
-      poin: petPoint,
-      status: 'aktif'
-    });
-    setActionDoneMsg('⚠️ Pelanggaran berhasil diinput!');
-    setTimeout(() => setActionDoneMsg(null), 3000);
-    setShowPelanggaranModal(false);
+    try {
+      await dbLocal.insertPelanggaran({
+        santri_id: petSId,
+        guru_id: user?.id || '',
+        jenis_id: petJenisId,
+        tanggal: petTanggal,
+        deskripsi: petDesc,
+        poin: petPoint,
+        status: 'aktif'
+      });
+      await refreshAdminData();
+      setActionDoneMsg('⚠️ Pelanggaran berhasil diinput!');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+      setShowPelanggaranModal(false);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal menyimpan pelanggaran: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
   };
 
   const handleDeleteViolation = (id: string) => {
     triggerConfirm(
       'Membatalkan Rekaman Pelanggaran',
       'Yakin ingin membatalkan rekaman pelanggaran ini?',
-      () => {
-        const list = dbLocal.getPelanggaran();
-        dbLocal.setPelanggaran(list.filter(v => v.id !== id));
-        setActionDoneMsg('🚨 Rekaman pelanggaran berhasil dibatalkan dari sistem.');
+      async () => {
+        try {
+          const { error } = await supabase.from('pelanggaran').delete().eq('id', id);
+          if (error) throw error;
+          await refreshAdminData();
+          setActionDoneMsg('🚨 Rekaman pelanggaran berhasil dibatalkan dari sistem.');
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal menghapus pelanggaran: ${err.message || err}`);
+        }
         setTimeout(() => setActionDoneMsg(null), 3000);
       }
     );
   };
 
-  const handleResolveViolation = (id: string) => {
-    const list = dbLocal.getPelanggaran();
-    const updated = list.map(v => {
-      if (v.id === id) {
-        return {
-          ...v,
-          status: 'ditindaklanjuti' as const,
+  const handleResolveViolation = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('pelanggaran')
+        .update({
+          status: 'ditindaklanjuti',
           catatan_tindak_lanjut: 'Telah diproses dan diberi takzir edukatif oleh Admin.'
-        };
-      }
-      return v;
-    });
-    dbLocal.setPelanggaran(updated);
-    setActionDoneMsg('✅ Pelanggaran telah ditindaklanjuti!');
+        })
+        .eq('id', id);
+      if (error) throw error;
+      await refreshAdminData();
+      setActionDoneMsg('✅ Pelanggaran telah ditindaklanjuti!');
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal: ${err.message || err}`);
+    }
     setTimeout(() => setActionDoneMsg(null), 3000);
   };
 
@@ -1500,53 +1544,70 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     setShowHapalanModal(true);
   };
 
-  const handleSaveHapalan = (e: React.FormEvent) => {
+  const handleSaveHapalan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hapSId || !hapSurah) {
       alert('Harap isi data dengan lengkap!');
       return;
     }
-    dbLocal.insertSetoranHapalan({
-      santri_id: hapSId,
-      guru_id: user?.id || 'p-admin',
-      tanggal: hapTanggal,
-      jenis: hapJenis,
-      surah_nama: hapSurah,
-      surah_nomor: 1,
-      ayat_dari: Number(hapAyatDari),
-      ayat_sampai: Number(hapAyatSampai),
-      jumlah_halaman: Number(hapPages),
-      nilai: hapValue,
-      catatan: hapCatatan,
-      kategori_id: selectedHapKatId
-    });
-    setActionDoneMsg('📖 Setoran hafalan baru berhasil terekam!');
-    setTimeout(() => setActionDoneMsg(null), 3000);
-    setShowHapalanModal(false);
+    try {
+      await dbLocal.insertSetoranHapalan({
+        santri_id: hapSId,
+        guru_id: user?.id || '',
+        tanggal: hapTanggal,
+        jenis: hapJenis,
+        surah_nama: hapSurah,
+        surah_nomor: 1,
+        ayat_dari: Number(hapAyatDari),
+        ayat_sampai: Number(hapAyatSampai),
+        jumlah_halaman: Number(hapPages),
+        nilai: hapValue,
+        catatan: hapCatatan,
+        kategori_id: selectedHapKatId
+      });
+      await refreshAdminData();
+      setActionDoneMsg('📖 Setoran hafalan baru berhasil terekam!');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+      setShowHapalanModal(false);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal menyimpan setoran: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
   };
 
-  const handleSaveHapKategori = (e: React.FormEvent) => {
+  const handleSaveHapKategori = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHapKatNama.trim()) return;
-    dbLocal.insertKategoriHapalan({
-      nama: newHapKatNama.trim(),
-      deskripsi: newHapKatDeskripsi.trim() || 'Program hafalan materi / kitab kuno.',
-      is_active: true
-    });
-    setNewHapKatNama('');
-    setNewHapKatDeskripsi('');
-    setActionDoneMsg('📁 Kategori / Matan hafalan baru sukses ditambahkan!');
-    setTimeout(() => setActionDoneMsg(null), 3000);
+    try {
+      await dbLocal.insertKategoriHapalan({
+        nama: newHapKatNama.trim(),
+        deskripsi: newHapKatDeskripsi.trim() || 'Program hafalan materi / kitab kuno.',
+        is_active: true
+      });
+      await refreshAdminData();
+      setNewHapKatNama('');
+      setNewHapKatDeskripsi('');
+      setActionDoneMsg('📁 Kategori / Matan hafalan baru sukses ditambahkan!');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal menyimpan kategori: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
   };
 
   const handleDeleteHapalan = (id: string) => {
     triggerConfirm(
       'Hapus Jurnal Setoran Hafalan',
       'Yakin ingin menghapus jurnal setoran hafalan murid ini?',
-      () => {
-        const list = dbLocal.getSetoranHapalan();
-        dbLocal.setSetoranHapalan(list.filter(h => h.id !== id));
-        setActionDoneMsg('🚨 Jurnal setoran hafalan murid terhapus.');
+      async () => {
+        try {
+          const { error } = await supabase.from('setoran_hapalan').delete().eq('id', id);
+          if (error) throw error;
+          await refreshAdminData();
+          setActionDoneMsg('🚨 Jurnal setoran hafalan murid terhapus.');
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal menghapus: ${err.message || err}`);
+        }
         setTimeout(() => setActionDoneMsg(null), 3000);
       }
     );
@@ -1608,8 +1669,25 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       }
     }
 
-    // 2. Persist to local fallback database
+    // 2. Persist to Supabase profiles table (or local cache if not creating new)
     if (accId) {
+      // Update existing profile in Supabase
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: accFullName,
+          phone: accPhone,
+          role: accRole,
+          is_active: accIsActive
+        })
+        .eq('id', accId);
+
+      if (updateError) {
+        setActionDoneMsg(`❌ Gagal update profil: ${updateError.message}`);
+        setTimeout(() => setActionDoneMsg(null), 5000);
+        return;
+      }
+
       const updated = list.map(item => {
         if (item.id === accId) {
           return {
@@ -1627,41 +1705,39 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       dbLocal.setProfiles(updated);
       setActionDoneMsg('✅ Akun pengguna berhasil diperbaharui!');
     } else {
-      const newAcc: Profile = {
-        id: `p-acc-${Date.now()}`,
-        full_name: accFullName,
-        email: accEmail,
-        phone: accPhone,
-        role: accRole,
-        is_active: accIsActive,
-        password: accPassword || '123456'
-      };
-      dbLocal.setProfiles([...list, newAcc]);
-      setActionDoneMsg('✅ Akun pengguna baru terdaftar!');
+      // After signUp, refresh data to get the real profile from Supabase
+      // The trigger on auth.users should have created the profile automatically
+      await refreshAdminData();
+      setActionDoneMsg('✅ Akun pengguna baru terdaftar di Supabase!');
     }
     setTimeout(() => setActionDoneMsg(null), 3000);
     setShowAccountModal(false);
   };
 
   const handleDeleteAccount = (id: string) => {
-    if (id === 'p-admin' || id === user?.id) {
-      setActionDoneMsg('❌ Gagal! Anda tidak diizinkan menghapus akun admin yang sedang Anda gunakan.');
+    if (id === user?.id) {
+      setActionDoneMsg('❌ Gagal! Anda tidak diizinkan menghapus akun yang sedang Anda gunakan.');
       setTimeout(() => setActionDoneMsg(null), 4000);
       return;
     }
     triggerConfirm(
       'Hapus Akun Pengguna',
       'Apakah Anda yakin ingin menghapus akun pengguna ini secara permanen dari sistem?',
-      () => {
-        const list = dbLocal.getProfiles();
-        dbLocal.setProfiles(list.filter(p => p.id !== id));
-        setActionDoneMsg('🚨 Akun berhasil dihapus permanent.');
+      async () => {
+        try {
+          const { error } = await supabase.from('profiles').delete().eq('id', id);
+          if (error) throw error;
+          await refreshAdminData();
+          setActionDoneMsg('🚨 Akun berhasil dihapus permanent.');
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal menghapus akun: ${err.message || err}`);
+        }
         setTimeout(() => setActionDoneMsg(null), 3000);
       }
     );
   };
 
-  const handleAdminLinkSantri = (e: React.FormEvent) => {
+  const handleAdminLinkSantri = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanNis = adminLinkNis.trim();
     if (!cleanNis) {
@@ -1669,38 +1745,45 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       return;
     }
     const allSantri = dbLocal.getSantri();
-    const targetIdx = allSantri.findIndex(s => s.nis === cleanNis);
-    if (targetIdx === -1) {
+    const targetSantri = allSantri.find(s => s.nis === cleanNis);
+    if (!targetSantri) {
       alert(`Gagal! Santri dengan NIS "${cleanNis}" tidak ditemukan dalam database.`);
       return;
     }
-    const targetSantri = allSantri[targetIdx];
     if (targetSantri.wali_id === adminSelectedWaliId) {
       alert(`Santri "${targetSantri.nama}" sudah berstatus tertaut dengan wali terpilih.`);
       return;
     }
-    // Update wali_id link
-    allSantri[targetIdx].wali_id = adminSelectedWaliId;
-    dbLocal.setSantri(allSantri);
-    setAdminLinkNis('');
-    
-    // Dispatch events to refresh
-    window.dispatchEvent(new Event('mh_local_store_change'));
-    setActionDoneMsg(`🎉 Sukses mengaitkan ${targetSantri.nama} ke Wali tersebut!`);
+    try {
+      const { error } = await supabase
+        .from('santri')
+        .update({ wali_id: adminSelectedWaliId })
+        .eq('id', targetSantri.id);
+      if (error) throw error;
+      await refreshAdminData();
+      setAdminLinkNis('');
+      setActionDoneMsg(`🎉 Sukses mengaitkan ${targetSantri.nama} ke Wali tersebut!`);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal mengaitkan: ${err.message || err}`);
+    }
     setTimeout(() => setActionDoneMsg(null), 3500);
   };
 
-  const handleAdminUnlinkSantri = (santriId: string) => {
+  const handleAdminUnlinkSantri = async (santriId: string) => {
     const allSantri = dbLocal.getSantri();
-    const targetIdx = allSantri.findIndex(s => s.id === santriId);
-    if (targetIdx !== -1) {
-      const sName = allSantri[targetIdx].nama;
-      allSantri[targetIdx].wali_id = '';
-      dbLocal.setSantri(allSantri);
-      
-      // Dispatch events to refresh
-      window.dispatchEvent(new Event('mh_local_store_change'));
-      setActionDoneMsg(`Kaitan akademik santri "${sName}" berhasil dilepas.`);
+    const targetSantri = allSantri.find(s => s.id === santriId);
+    if (targetSantri) {
+      try {
+        const { error } = await supabase
+          .from('santri')
+          .update({ wali_id: null })
+          .eq('id', santriId);
+        if (error) throw error;
+        await refreshAdminData();
+        setActionDoneMsg(`Kaitan akademik santri "${targetSantri.nama}" berhasil dilepas.`);
+      } catch (err: any) {
+        setActionDoneMsg(`❌ Gagal melepas kaitan: ${err.message || err}`);
+      }
       setTimeout(() => setActionDoneMsg(null), 3000);
     }
   };

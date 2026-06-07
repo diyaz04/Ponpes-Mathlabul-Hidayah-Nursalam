@@ -1,7 +1,6 @@
 import React from 'react';
 import { Printer, Calendar, DollarSign, User, Check, Award } from 'lucide-react';
 import { Tagihan, Pembayaran, Santri, Profile } from '../../types';
-import { dbLocal } from '../../lib/supabase';
 
 interface BuktiPembayaranProps {
   tagihan: Tagihan;
@@ -26,7 +25,7 @@ export function BuktiPembayaran({ tagihan, pembayaran, santri, wali, onClose }: 
   };
 
   const getJenisName = (jenisId: string) => {
-    return dbLocal.getJenisPembayaran().find(j => j.id === jenisId)?.nama || tagihan.jenis_nama || 'SPP Syahriyah Pesantren';
+    return tagihan.jenis_nama || jenisId || 'SPP Syahriyah Pesantren';
   };
 
   const handlePrint = () => {

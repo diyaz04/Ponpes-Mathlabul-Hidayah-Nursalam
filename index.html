@@ -17,6 +17,23 @@
     <meta name="mobile-web-app-capable" content="yes" />
   </head>
   <body class="bg-slate-100 antialiased select-none">
+    <!-- Midtrans Snap.js dimuat dinamis via Vite env -->
+    <script type="module">
+      // VITE_MIDTRANS_CLIENT_KEY wajib diset di .env
+      const clientKey = import.meta.env.VITE_MIDTRANS_CLIENT_KEY || '';
+      const isProduction = import.meta.env.VITE_MIDTRANS_IS_PRODUCTION === 'true';
+      const snapHost = isProduction
+        ? 'https://app.midtrans.com'
+        : 'https://app.sandbox.midtrans.com';
+      if (clientKey) {
+        const script = document.createElement('script');
+        script.src = `${snapHost}/snap/snap.js`;
+        script.setAttribute('data-client-key', clientKey);
+        document.head.appendChild(script);
+      } else {
+        console.warn('[Midtrans] VITE_MIDTRANS_CLIENT_KEY tidak dikonfigurasi. Snap.js tidak dimuat.');
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 

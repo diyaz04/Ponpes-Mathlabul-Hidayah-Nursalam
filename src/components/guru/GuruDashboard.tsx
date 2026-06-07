@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
-import { dbLocal } from '../../lib/supabase';
+import { dbLocal, supabase, refreshSupabaseCache } from '../../lib/supabase';
 import { Santri, Pelanggaran, SetoranHapalan, JenisPelanggaran, Profile, KategoriHapalan } from '../../types';
 import { ImageUploader } from '../shared/ImageUploader';
 
@@ -117,7 +117,7 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
       const allH = dbLocal.getSetoranHapalan();
       setMyHapalan(allH.filter(h => h.guru_id === user.id));
     }
-  });
+  }, ['santri', 'jenis_pelanggaran', 'kategori_hapalan', 'pelanggaran', 'setoran_hapalan']);
 
   const getSantriName = (id: string) => {
     return santriList.find(s => s.id === id)?.nama || 'Santri';
@@ -140,7 +140,7 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
   };
 
   // Submit new infraction trigger notification inside!
-  const handleSubmitPelanggaran = (e: React.FormEvent) => {
+  const handleSubmitPelanggaran = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pSantriId || !pJenisId || !pDesc) {
       alert('Harap lengkapi isian formulir pelanggaran!');
@@ -148,27 +148,31 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
     }
     if (!user) return;
 
-    dbLocal.insertPelanggaran({
-      santri_id: pSantriId,
-      guru_id: user.id,
-      jenis_id: pJenisId,
-      tanggal: pTanggal,
-      deskripsi: pDesc,
-      poin: pPoint,
-      status: 'aktif'
-    });
+    try {
+      await dbLocal.insertPelanggaran({
+        santri_id: pSantriId,
+        guru_id: user.id,
+        jenis_id: pJenisId,
+        tanggal: pTanggal,
+        deskripsi: pDesc,
+        poin: pPoint,
+        status: 'aktif'
+      });
 
-    setSuccessMsg('⚠️ Pelanggaran berhasil diinput & notifikasi wali dikirim!');
-    setTimeout(() => setSuccessMsg(null), 3000);
+      setSuccessMsg('⚠️ Pelanggaran berhasil diinput & notifikasi wali dikirim!');
+      setTimeout(() => setSuccessMsg(null), 3000);
 
-    // Reset Form
-    setPDesc('');
-    setPJenisId('');
-    setPSantriId('');
+      // Reset Form
+      setPDesc('');
+      setPJenisId('');
+      setPSantriId('');
+    } catch (err: any) {
+      alert(`Gagal menyimpan pelanggaran: ${err.message || err}`);
+    }
   };
 
   // Submit new hafalan - triggers update calculations + notify!
-  const handleSubmitHapalan = (e: React.FormEvent) => {
+  const handleSubmitHapalan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hSantriId || !hSurahNama || !hAyatDari || !hAyatSampai || !hPages) {
       alert('Harap lengkapi biodata setoran!');
@@ -176,40 +180,58 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
     }
     if (!user) return;
 
-    dbLocal.insertSetoranHapalan({
-      santri_id: hSantriId,
-      guru_id: user.id,
-      tanggal: hTanggal,
-      jenis: hJenis,
-      surah_nama: hSurahNama,
-      surah_nomor: 1, // simplified index
-      ayat_dari: Number(hAyatDari),
-      ayat_sampai: Number(hAyatSampai),
-      jumlah_halaman: Number(hPages),
-      nilai: hValue,
-      catatan: hCatatan,
-      kategori_id: selectedHKatId
-    });
+    try {
+      await dbLocal.insertSetoranHapalan({
+        santri_id: hSantriId,
+        guru_id: user.id,
+        tanggal: hTanggal,
+        jenis: hJenis,
+        surah_nama: hSurahNama,
+        surah_nomor: 1, // simplified index
+        ayat_dari: Number(hAyatDari),
+        ayat_sampai: Number(hAyatSampai),
+        jumlah_halaman: Number(hPages),
+        nilai: hValue,
+        catatan: hCatatan,
+        kategori_id: selectedHKatId
+      });
 
-    setSuccessMsg('📖 Hafalan berhasil diinput & terekam di wali santri!');
-    setTimeout(() => setSuccessMsg(null), 3000);
+      setSuccessMsg('📖 Hafalan berhasil diinput & terekam di wali santri!');
+      setTimeout(() => setSuccessMsg(null), 3000);
 
-    // Reset Form fields
-    setHCatatan('');
-    setHSantriId('');
-  };
-
-  const handleDeleteHapalan = (id: string) => {
-    if (confirm('Yakin ingin menghapus rekaman setoran ini?')) {
-      const list = dbLocal.getSetoranHapalan();
-      dbLocal.setSetoranHapalan(list.filter(h => h.id !== id));
+      // Reset Form fields
+      setHCatatan('');
+      setHSantriId('');
+    } catch (err: any) {
+      alert(`Gagal menyimpan setoran hapalan: ${err.message || err}`);
     }
   };
 
-  const handleDeleteViolations = (id: string) => {
+  const handleDeleteHapalan = async (id: string) => {
+    if (confirm('Yakin ingin menghapus rekaman setoran ini?')) {
+      try {
+        const { error } = await supabase.from('setoran_hapalan').delete().eq('id', id);
+        if (error) throw error;
+        await refreshSupabaseCache();
+        const allH = dbLocal.getSetoranHapalan();
+        setMyHapalan(allH.filter(h => h.guru_id === user?.id));
+      } catch (err: any) {
+        alert(`Gagal menghapus setoran: ${err.message || err}`);
+      }
+    }
+  };
+
+  const handleDeleteViolations = async (id: string) => {
     if (confirm('Yakin ingin membatalkan logs kedisiplinan ini?')) {
-      const list = dbLocal.getPelanggaran();
-      dbLocal.setPelanggaran(list.filter(v => v.id !== id));
+      try {
+        const { error } = await supabase.from('pelanggaran').delete().eq('id', id);
+        if (error) throw error;
+        await refreshSupabaseCache();
+        const allV = dbLocal.getPelanggaran();
+        setMyViolations(allV.filter(v => v.guru_id === user?.id));
+      } catch (err: any) {
+        alert(`Gagal menghapus pelanggaran: ${err.message || err}`);
+      }
     }
   };
 
@@ -258,6 +280,27 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
       return p;
     });
 
+    // Sync to Supabase profiles table
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        full_name: profileName.trim(),
+        phone: profilePhone.trim(),
+        avatar_url: selectedAvatar
+      })
+      .eq('id', user.id);
+
+    if (updateError) {
+      setProfileErrorMsg(`Gagal update profil: ${updateError.message}`);
+      setTimeout(() => setProfileErrorMsg(null), 5000);
+      return;
+    }
+
+    // Update password in Supabase Auth if changed
+    if (finalPassword !== (user.password || 'guru')) {
+      await supabase.auth.updateUser({ password: finalPassword }).catch(() => undefined);
+    }
+
     dbLocal.setProfiles(updatedProfiles);
     setSuccessMsg('🎉 Berhasil! Profil, foto profil, dan kata sandi akses Anda diperbarui secara aman.');
     
@@ -268,7 +311,6 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
 
     // Trigger state sync across system components
     window.dispatchEvent(new Event('mh_auth_change'));
-    window.dispatchEvent(new Event('mh_local_store_change'));
 
     setTimeout(() => {
       setSuccessMsg(null);

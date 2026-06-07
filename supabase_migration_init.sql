@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.santri (
   foto_url text,
   status text NOT NULL DEFAULT 'aktif' CHECK (status IN ('aktif','alumni','keluar')),
   tahun_masuk text NOT NULL,
+  bulan_masuk text,
   created_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -74,8 +75,31 @@ CREATE TABLE IF NOT EXISTS public.setoran_hapalan (
   jumlah_halaman numeric(5,2) NOT NULL DEFAULT 0,
   nilai text NOT NULL CHECK (nilai IN ('mumtaz','jayyid_jiddan','jayyid','maqbul')),
   catatan text,
+  kategori_id uuid,
   created_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS public.kategori_hapalan (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nama text NOT NULL,
+  deskripsi text,
+  is_active boolean DEFAULT true,
+  created_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.santri ADD COLUMN IF NOT EXISTS bulan_masuk text;
+ALTER TABLE public.setoran_hapalan ADD COLUMN IF NOT EXISTS kategori_id uuid;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'setoran_hapalan_kategori_id_fkey'
+  ) THEN
+    ALTER TABLE public.setoran_hapalan
+      ADD CONSTRAINT setoran_hapalan_kategori_id_fkey
+      FOREIGN KEY (kategori_id) REFERENCES public.kategori_hapalan(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.progress_hapalan (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -85,6 +109,24 @@ CREATE TABLE IF NOT EXISTS public.progress_hapalan (
   last_surah text,
   updated_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS hero_bg_color text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS hero_img_url text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS hero_img_opacity numeric(4,2);
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS hero_type text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_santri_val text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_santri_lbl text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_halaqah_val text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_halaqah_lbl text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_spp_val text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_spp_lbl text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_satisfaction_val text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS stats_satisfaction_lbl text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS sejarah_sub text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS sejarah_title text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS routines_json text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS facilities_json text;
+ALTER TABLE public.profil_pesantren ADD COLUMN IF NOT EXISTS testimonials_json text;
 
 -- E. Konten Publik (CMS)
 CREATE TABLE IF NOT EXISTS public.profil_pesantren (
@@ -99,6 +141,23 @@ CREATE TABLE IF NOT EXISTS public.profil_pesantren (
   telepon text,
   email text,
   foto_url text,
+  hero_bg_color text,
+  hero_img_url text,
+  hero_img_opacity numeric(4,2),
+  hero_type text CHECK (hero_type IS NULL OR hero_type IN ('statis','dinamis')),
+  stats_santri_val text,
+  stats_santri_lbl text,
+  stats_halaqah_val text,
+  stats_halaqah_lbl text,
+  stats_spp_val text,
+  stats_spp_lbl text,
+  stats_satisfaction_val text,
+  stats_satisfaction_lbl text,
+  sejarah_sub text,
+  sejarah_title text,
+  routines_json text,
+  facilities_json text,
+  testimonials_json text,
   updated_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -383,6 +442,7 @@ ALTER TABLE public.santri ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.jenis_pelanggaran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pelanggaran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.setoran_hapalan ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kategori_hapalan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.progress_hapalan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profil_pesantren ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.program ENABLE ROW LEVEL SECURITY;
@@ -437,6 +497,9 @@ CREATE POLICY "Gurus can insert setoran hapalan" ON public.setoran_hapalan FOR A
   public.get_user_role() = 'guru' AND (guru_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid()))
 );
 CREATE POLICY "Admins have full CRUD on setoran_hapalan" ON public.setoran_hapalan FOR ALL USING (public.get_user_role() = 'admin');
+
+CREATE POLICY "Kategori hapalan readable by authenticated" ON public.kategori_hapalan FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Kategori hapalan managed by admin" ON public.kategori_hapalan FOR ALL USING (public.get_user_role() = 'admin');
 
 -- policies for progress_hapalan
 CREATE POLICY "Progress hapalan are viewable by relevant wali, gurus, and admin" ON public.progress_hapalan FOR SELECT USING (

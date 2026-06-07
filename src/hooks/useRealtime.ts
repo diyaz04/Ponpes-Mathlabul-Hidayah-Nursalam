@@ -1,29 +1,35 @@
 import { useEffect, useRef } from 'react';
+import { refreshSupabaseCache, supabase } from '../lib/supabase';
 
-export function useRealtime(callback: () => void) {
+export function useRealtime(callback: () => void | Promise<void>, tables: string[] = []) {
   const latestCallback = useRef(callback);
 
-  // Always keep the ref pointing to the latest callback function passed to the hook
   useEffect(() => {
     latestCallback.current = callback;
   }, [callback]);
 
   useEffect(() => {
-    const handler = () => {
-      latestCallback.current();
-    };
+    refreshSupabaseCache()
+      .catch((error) => console.error('[Supabase Realtime Cache Failure]', error))
+      .finally(() => latestCallback.current());
 
-    // Invoke immediately on mount
-    handler();
+    if (tables.length === 0) {
+      return;
+    }
 
-    // Bind local state changes and auth transitions
-    window.addEventListener('mh_local_store_change', handler);
-    window.addEventListener('mh_auth_change', handler);
+    const uniqueChannelName = `realtime:${tables.join(':')}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const channel = supabase.channel(uniqueChannelName);
+    tables.forEach((table) => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+        refreshSupabaseCache()
+          .catch((error) => console.error('[Supabase Realtime Cache Failure]', error))
+          .finally(() => latestCallback.current());
+      });
+    });
+    channel.subscribe();
 
     return () => {
-      window.removeEventListener('mh_local_store_change', handler);
-      window.removeEventListener('mh_auth_change', handler);
+      supabase.removeChannel(channel);
     };
-  }, []); // Run only once on mount
+  }, [tables.join(':')]);
 }
-

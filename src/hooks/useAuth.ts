@@ -1,73 +1,67 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Profile, UserRole } from '../types';
-import { dbLocal } from '../lib/supabase';
-
-// Helper to keep active session role for testing
-const SESSION_KEY = 'mh_auth_session_user_id';
+import { getCurrentProfile, supabase } from '../lib/supabase';
 
 export function useAuth() {
   const [user, setUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize active user
-  useEffect(() => {
-    const profiles = dbLocal.getProfiles();
-    const storedUserId = localStorage.getItem(SESSION_KEY);
-    
-    if (storedUserId) {
-      const currentUser = profiles.find(p => p.id === storedUserId) || null;
-      setUser(currentUser);
-    } else {
+  const refreshProfile = async () => {
+    setLoading(true);
+    try {
+      const profile = await getCurrentProfile();
+      setUser(profile);
+    } catch (error) {
+      console.error('[Supabase Profile Load Failure]', error);
       setUser(null);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
 
-    // Sync other components during role switches
-    const handleAuthChange = () => {
-      const refreshedProfiles = dbLocal.getProfiles();
-      const updatedUserId = localStorage.getItem(SESSION_KEY);
-      const updatedUser = updatedUserId ? (refreshedProfiles.find(p => p.id === updatedUserId) || null) : null;
-      setUser(updatedUser);
-    };
+  useEffect(() => {
+    refreshProfile();
 
-    window.addEventListener('mh_auth_change', handleAuthChange);
+    const { data } = supabase.auth.onAuthStateChange(() => {
+      refreshProfile();
+    });
+
     return () => {
-      window.removeEventListener('mh_auth_change', handleAuthChange);
+      data.subscription.unsubscribe();
     };
   }, []);
 
-  const login = (role: UserRole, customUserId?: string) => {
-    setLoading(true);
-    const profiles = dbLocal.getProfiles();
-    
-    // Choose selected user or matching role matching user
-    let selectedUser = profiles.find(p => p.id === customUserId);
-    if (!selectedUser) {
-      selectedUser = profiles.find(p => p.role === role);
+  const login = async (_role: UserRole, email?: string, password?: string) => {
+    if (!email || !password) {
+      throw new Error('Email dan password wajib diisi.');
     }
 
-    if (selectedUser) {
-      localStorage.setItem(SESSION_KEY, selectedUser.id);
-      setUser(selectedUser);
-      window.dispatchEvent(new Event('mh_auth_change'));
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password
+      });
+
+      if (error) throw error;
+      await refreshProfile();
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const logout = () => {
+  const logout = async () => {
     setLoading(true);
-    localStorage.removeItem(SESSION_KEY);
-    setUser(null);
-    window.dispatchEvent(new Event('mh_auth_change'));
-    setLoading(false);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const switchRole = (role: UserRole) => {
-    const list = dbLocal.getProfiles();
-    const target = list.find(p => p.role === role);
-    if (target) {
-      login(role, target.id);
-    }
+  const switchRole = (_role: UserRole) => {
+    console.warn('[Supabase Auth] switchRole dinonaktifkan. Login dengan akun Supabase sesuai role.');
   };
 
   return {
@@ -76,6 +70,6 @@ export function useAuth() {
     login,
     logout,
     switchRole,
-    allProfiles: dbLocal.getProfiles()
+    allProfiles: [] as Profile[]
   };
 }
