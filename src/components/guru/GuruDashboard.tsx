@@ -235,7 +235,7 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
     }
   };
 
-  const handleSaveGuruProfile = (e: React.FormEvent) => {
+  const handleSaveGuruProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     if (!profileName.trim() || !profileEmail.trim()) {
