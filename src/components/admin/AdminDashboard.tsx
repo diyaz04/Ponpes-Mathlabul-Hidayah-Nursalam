@@ -1640,78 +1640,62 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       alert('Nama dan email wajib diisi!');
       return;
     }
-    const list = dbLocal.getProfiles();
 
-    // 1. Direct registration to Supabase if config is configured
-    if (isRealSupabaseConfigured && supabase) {
-      try {
-        console.log(`[Supabase Action] Registering ${accEmail} with role pointer: ${accRole}`);
-        if (!accId) {
-          const { data, error } = await supabase.auth.signUp({
-            email: accEmail.trim().toLowerCase(),
-            password: accPassword || '123456',
-            options: {
-              data: {
-                role: accRole,
-                full_name: accFullName,
-                phone: accPhone
-              }
-            }
-          });
-          if (error) {
-            console.error('[Supabase Auth Error]', error.message);
-          } else if (data?.user) {
-            console.log('[Supabase Auth Success] Registered user ID:', data.user.id);
-          }
-        }
-      } catch (err: any) {
-        console.error('[Supabase Auth Action Failure]', err);
-      }
-    }
-
-    // 2. Persist to Supabase profiles table (or local cache if not creating new)
-    if (accId) {
-      // Update existing profile in Supabase
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          full_name: accFullName,
-          phone: accPhone,
-          role: accRole,
-          is_active: accIsActive
-        })
-        .eq('id', accId);
-
-      if (updateError) {
-        setActionDoneMsg(`❌ Gagal update profil: ${updateError.message}`);
-        setTimeout(() => setActionDoneMsg(null), 5000);
-        return;
-      }
-
-      const updated = list.map(item => {
-        if (item.id === accId) {
-          return {
-            ...item,
+    try {
+      if (accId) {
+        // UPDATE existing profile
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
             full_name: accFullName,
-            email: accEmail,
             phone: accPhone,
             role: accRole,
-            is_active: accIsActive,
-            password: accPassword || item.password
-          };
+            is_active: accIsActive
+          })
+          .eq('id', accId);
+
+        if (updateError) {
+          setActionDoneMsg(`❌ Gagal update profil: ${updateError.message}`);
+          setTimeout(() => setActionDoneMsg(null), 5000);
+          return;
         }
-        return item;
-      });
-      dbLocal.setProfiles(updated);
-      setActionDoneMsg('✅ Akun pengguna berhasil diperbaharui!');
-    } else {
-      // After signUp, refresh data to get the real profile from Supabase
-      // The trigger on auth.users should have created the profile automatically
+        setActionDoneMsg('✅ Akun pengguna berhasil diperbaharui!');
+      } else {
+        // CREATE new account — pakai server admin endpoint agar langsung aktif tanpa verifikasi email
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token || '';
+
+        const response = await fetch('/api/admin/account/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            full_name: accFullName,
+            email: accEmail.trim().toLowerCase(),
+            phone: accPhone || '',
+            password: accPassword || '123456',
+            role: accRole
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Gagal membuat akun pengguna.');
+        }
+
+        setActionDoneMsg(`✅ Akun ${accRole === 'admin' ? 'Admin' : accRole === 'guru' ? 'Guru' : 'Wali'} baru berhasil dibuat dan langsung aktif!`);
+      }
+
       await refreshAdminData();
-      setActionDoneMsg('✅ Akun pengguna baru terdaftar di Supabase!');
+      setTimeout(() => setActionDoneMsg(null), 4000);
+      setShowAccountModal(false);
+    } catch (error: any) {
+      setActionDoneMsg(`❌ Gagal: ${error.message}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
     }
-    setTimeout(() => setActionDoneMsg(null), 3000);
-    setShowAccountModal(false);
   };
 
   const handleDeleteAccount = (id: string) => {
@@ -4140,7 +4124,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       {/* Pupil Edit/Create Modal (Surgical Drawer) */}
       {showPupilModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-51 select-none">
-          <form onSubmit={handleSavePupil} className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border border-gray-150 space-y-4 leading-normal text-left">
+          <form onSubmit={handleSavePupil} className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-150 leading-normal text-left flex flex-col max-h-[90vh]">
+          <div className="p-6 pb-0 flex-shrink-0">
+            <h3 className="font-extrabold text-gray-950 text-sm uppercase tracking-wide">
+              {pupilId ? 'Koreksi Berkas Santri' : 'Register Berkas Santri'}
+            </h3>
+          </div>
+          <div className="overflow-y-auto flex-1 p-6 pt-4 space-y-4">
             <h3 className="font-extrabold text-gray-950 text-sm uppercase tracking-wide">
               {pupilId ? 'Koreksi Berkas Santri' : 'Register Berkas Santri'}
             </h3>
@@ -4325,7 +4315,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               </div>
             </div>
 
-            <div className="pt-2 flex gap-3">
+            </div>{/* end scrollable area */}
+            <div className="p-6 pt-4 border-t border-slate-100 flex-shrink-0 flex gap-3">
               <button 
                 type="button"
                 onClick={() => setShowPupilModal(false)}
