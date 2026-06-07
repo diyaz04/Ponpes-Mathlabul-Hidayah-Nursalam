@@ -9,7 +9,9 @@ import { createClient } from '@supabase/supabase-js';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+
+// ✅ FIX 1: PORT harus dari env var — Render.com inject PORT otomatis
+const PORT = Number(process.env.PORT) || 3000;
 
 const getSupabaseAdmin = () => {
     const supabaseUrl =
@@ -171,6 +173,8 @@ app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
         message: 'Mathlabul Hidayah Nursalam API is running smoothly!',
+        port: PORT,
+        env: process.env.NODE_ENV || 'development',
     });
 });
 
@@ -325,9 +329,7 @@ app.post('/api/admin/wali/create-with-santri-auth', async (req, res) => {
     }
 });
 
-// Create Payment endpoint (Express Server side)
-// Create Payment endpoint (Express Server side)
-// Create Payment endpoint (Express Server side)
+// Create Payment endpoint
 app.post('/api/payment/create', async (req, res) => {
     try {
         const { santriId, santriName, tagihanId, amount, bulan, tahun } =
@@ -347,10 +349,6 @@ app.post('/api/payment/create', async (req, res) => {
             });
         }
 
-        /**
-         * Midtrans gross_amount harus angka integer.
-         * Jangan kirim "750.000", "Rp 750.000", atau string format rupiah.
-         */
         const numericAmount = Number(String(amount).replace(/[^\d]/g, ''));
 
         if (!Number.isInteger(numericAmount) || numericAmount <= 0) {
@@ -408,7 +406,6 @@ app.post('/api/payment/create', async (req, res) => {
         console.log('[Midtrans] URL:', baseUrl);
         console.log('[Midtrans] Order ID:', orderId);
         console.log('[Midtrans] Amount:', numericAmount);
-        console.log('[Midtrans] Customer Email:', customerEmail);
         console.log('[Midtrans] Payload:', JSON.stringify(payload, null, 2));
         console.log('==================================================');
 
@@ -464,8 +461,11 @@ app.post('/api/payment/create', async (req, res) => {
         });
     }
 });
-// Direct Webhook Receiver endpoint from Midtrans
-app.post('/api/payment/webhook', (req, res) => {
+
+// ✅ FIX 2: Webhook diubah jadi async handler yang proper
+// Bug lama: handler sync tapi pakai .then()/.catch() — bisa bikin race condition
+// dan response kadang ga kekirim sebelum Midtrans timeout
+app.post('/api/payment/webhook', async (req, res) => {
     try {
         const {
             order_id,
@@ -479,11 +479,15 @@ app.post('/api/payment/webhook', (req, res) => {
         const serverKey = process.env.MIDTRANS_SERVER_KEY || '';
 
         if (!serverKey) {
+            console.error('[Midtrans Webhook] MIDTRANS_SERVER_KEY tidak ada!');
             return res.status(500).json({
                 error: 'MIDTRANS_SERVER_KEY belum dikonfigurasi untuk verifikasi webhook',
             });
         }
 
+        // ✅ FIX 3: gross_amount dari Midtrans dikirim sebagai string (misal "150000.00")
+        // Signature harus pakai nilai string PERSIS seperti yang dikirim Midtrans
+        // tanpa dikonversi ke number terlebih dulu
         const expectedSignature = crypto
             .createHash('sha512')
             .update(`${order_id}${status_code}${gross_amount}${serverKey}`)
@@ -493,68 +497,39 @@ app.post('/api/payment/webhook', (req, res) => {
             console.warn(
                 `[Midtrans Webhook Rejected] Invalid signature for order ${order_id}`,
             );
+            console.warn(`[Midtrans Webhook] Expected: ${expectedSignature}`);
+            console.warn(`[Midtrans Webhook] Received: ${signature_key}`);
+            console.warn(`[Midtrans Webhook] Components: order_id=${order_id}, status_code=${status_code}, gross_amount=${gross_amount}`);
             return res
                 .status(401)
                 .json({ error: 'Invalid Midtrans signature_key' });
         }
 
         console.log(
-            `[Midtrans Webhook Received] Order ID: ${order_id}, Status: ${transaction_status}, Type: ${payment_type}, Amount: ${gross_amount}`,
+            `[Midtrans Webhook OK] Order: ${order_id} | Status: ${transaction_status} | Type: ${payment_type} | Amount: ${gross_amount}`,
         );
 
         const paymentMethod = payment_type || 'Midtrans';
 
         if (['capture', 'settlement'].includes(transaction_status)) {
-            settleSupabasePayment(order_id, paymentMethod, 'lunas')
-                .then((result) =>
-                    res
-                        .status(200)
-                        .json({ status: 'success', received: true, ...result }),
-                )
-                .catch((error: any) =>
-                    res.status(500).json({
-                        error: error.message || 'Failed to settle payment',
-                    }),
-                );
-            return;
+            const result = await settleSupabasePayment(order_id, paymentMethod, 'lunas');
+            return res.status(200).json({ status: 'success', received: true, ...result });
         }
 
-        if (
-            ['deny', 'cancel', 'expire', 'failure'].includes(transaction_status)
-        ) {
-            settleSupabasePayment(order_id, paymentMethod, 'gagal')
-                .then((result) =>
-                    res
-                        .status(200)
-                        .json({ status: 'success', received: true, ...result }),
-                )
-                .catch((error: any) =>
-                    res.status(500).json({
-                        error: error.message || 'Failed to fail payment',
-                    }),
-                );
-            return;
+        if (['deny', 'cancel', 'expire', 'failure'].includes(transaction_status)) {
+            const result = await settleSupabasePayment(order_id, paymentMethod, 'gagal');
+            return res.status(200).json({ status: 'success', received: true, ...result });
         }
 
         if (transaction_status === 'pending') {
-            settleSupabasePayment(order_id, paymentMethod, 'pending')
-                .then((result) =>
-                    res
-                        .status(200)
-                        .json({ status: 'success', received: true, ...result }),
-                )
-                .catch((error: any) =>
-                    res.status(500).json({
-                        error:
-                            error.message || 'Failed to mark pending payment',
-                    }),
-                );
-            return;
+            const result = await settleSupabasePayment(order_id, paymentMethod, 'pending');
+            return res.status(200).json({ status: 'success', received: true, ...result });
         }
 
-        res.status(200).json({ status: 'ignored', received: true });
+        return res.status(200).json({ status: 'ignored', received: true, transaction_status });
     } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        console.error('[Midtrans Webhook Error]', error);
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -574,6 +549,8 @@ async function setupFrontend() {
         // Serve static files in production build
         const distPath = path.join(process.cwd(), 'dist');
         app.use(express.static(distPath));
+        // ✅ FIX 4: Wildcard route harus SETELAH semua API routes
+        // Pastikan ga ada API route yang ketimpa oleh catch-all ini
         app.get('*', (req, res) => {
             res.sendFile(path.join(distPath, 'index.html'));
         });
@@ -581,6 +558,8 @@ async function setupFrontend() {
 
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`[Server] running on http://0.0.0.0:${PORT}`);
+        console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`[Server] Midtrans mode: ${process.env.MIDTRANS_IS_PRODUCTION === 'true' ? 'PRODUCTION' : 'SANDBOX'}`);
     });
 }
 
