@@ -60,7 +60,7 @@ export function LandingPage({
     const title = berita.judul;
     const bodyText = berita.konten || berita.isi || '';
     const dateText = new Date(berita.tanggal_publish || berita.tanggal || new Date()).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    const textToCopy = `*${title}*\n📅 ${dateText}\n\n${bodyText.substring(0, 160)}...\n\nBaca warta lengkapnya di Portal Mathla'bul Hidayah:\n${window.location.origin}`;
+    const textToCopy = `*${title}*\n📅 ${dateText}\n\n${bodyText.substring(0, 160)}...\n\nBaca warta lengkapnya di Portal Mathlabul Hidayah:\n${window.location.origin}`;
 
     if (navigator.share) {
       try {
@@ -169,7 +169,7 @@ export function LandingPage({
       title: 'Madrasah Formal (07:15 - 12:45)',
       description: 'Pendidikan kurikulum menteri agama nasional dipadukan pengkajian kitab kuning klasik (turots).',
       items: [
-        { time: '07.15', activity: 'KBM Formal (MTs / MA Mathla\'bul Hidayah)' },
+        { time: '07.15', activity: 'KBM Formal (MTs / MA Mathlabul Hidayah)' },
         { time: '10.00', activity: 'Shalat Dhuha & Istirahat Sehat' },
         { time: '12.00', activity: 'Shalat Dzuhur Berjamaah & Makan Siang' }
       ]
@@ -233,7 +233,7 @@ export function LandingPage({
       city: 'Bandung (Wali Santri Fatih)',
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?mx=100&q=80',
       rating: 5,
-      words: 'Masyallah, lewat portal akademik Mathla\'bul Hidayah saya bisa memantau setoran hafalan Fatih setiap subuh meskipun saya tinggal jauh di Bandung. Berita asrama dan invoice SPP pun transparan tanpa perlu menebak-nebak.'
+      words: 'Masyallah, lewat portal akademik Mathlabul Hidayah saya bisa memantau setoran hafalan Fatih setiap subuh meskipun saya tinggal jauh di Bandung. Berita asrama dan invoice SPP pun transparan tanpa perlu menebak-nebak.'
     },
     {
       id: 2,
@@ -309,7 +309,7 @@ export function LandingPage({
     },
     {
       q: 'Apakah biaya SPP dan uang pendaftaran dapat dibayar cicil?',
-      a: 'Ya, Mathla\'bul Hidayah menyediakan skema kuitansi digital transparan. Pembayaran dapat dikonfirmasi lewat upload tanda bukti transfer di Portal Wali. Sistem akan memverifikasi pembayaran secara real-time dan mengeluarkan kuitansi digital bermeterai yang sah.'
+      a: 'Ya, Mathlabul Hidayah menyediakan skema kuitansi digital transparan. Pembayaran dapat dikonfirmasi lewat upload tanda bukti transfer di Portal Wali. Sistem akan memverifikasi pembayaran secara real-time dan mengeluarkan kuitansi digital bermeterai yang sah.'
     },
     {
       q: 'Bagaimana prosedur penanganan pelanggaran santri?',
@@ -338,13 +338,13 @@ export function LandingPage({
             <div className="absolute inset-0 rounded-2xl border-2 border-amber-400/40 scale-[1.04]" />
             <img 
               src="https://lh3.googleusercontent.com/d/1HPt7BpZfaeWheB8rJCHwEcrfCQhkKdop" 
-              alt="Logo Mathla'bul Hidayah"
+              alt="Logo Mathlabul Hidayah"
               referrerPolicy="no-referrer"
               className="w-full h-full object-contain rounded-xl relative z-10"
             />
           </div>
           <div>
-            <h1 className="text-xs sm:text-sm font-black tracking-wider uppercase leading-tight text-slate-800">MATHLA'BUL HIDAYAH</h1>
+            <h1 className="text-xs sm:text-sm font-black tracking-wider uppercase leading-tight text-slate-800">MATHLABUL HIDAYAH</h1>
             <p className="text-[9px] sm:text-[10px] text-green-700 font-extrabold uppercase tracking-widest leading-none mt-0.5">Nursalam Islamic Ponpes</p>
           </div>
         </div>
@@ -431,13 +431,13 @@ export function LandingPage({
                     <div className="absolute inset-0 rounded-xl border border-amber-400/40 scale-[1.04]" />
                     <img 
                       src="https://lh3.googleusercontent.com/d/1HPt7BpZfaeWheB8rJCHwEcrfCQhkKdop" 
-                      alt="Logo Mathla'bul Hidayah"
+                      alt="Logo Mathlabul Hidayah"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-contain rounded-lg relative z-10"
                     />
                   </div>
                   <div>
-                    <h2 className="text-xs font-black tracking-wider uppercase text-slate-800">MATHLA'BUL HIDAYAH</h2>
+                    <h2 className="text-xs font-black tracking-wider uppercase text-slate-800">MATHLABUL HIDAYAH</h2>
                     <p className="text-[9px] text-green-700 font-bold uppercase tracking-widest leading-none mt-0.5">Nursalam</p>
                   </div>
                 </div>
@@ -1304,7 +1304,7 @@ export function LandingPage({
                   </div>
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-wider text-green-200 leading-none">Berita & Kajian</h3>
-                    <p className="text-[10px] text-green-100/80 font-bold mt-1">Mathla'bul Hidayah</p>
+                    <p className="text-[10px] text-green-100/80 font-bold mt-1">Mathlabul Hidayah</p>
                   </div>
                 </div>
                 <button

@@ -240,9 +240,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   };
 
   // Custom added states: reports & range date filters
-  const [reportFilterType, setReportFilterType] = useState<'bulan' | 'tanggal'>('bulan');
+  const [reportFilterType, setReportFilterType] = useState<'bulan' | 'tanggal' | 'rentang'>('bulan');
   const [filterBulan, setFilterBulan] = useState('Juni');
   const [filterTahun, setFilterTahun] = useState('2026');
+  const [filterSingleDate, setFilterSingleDate] = useState('2026-06-01');
   const [filterStartDate, setFilterStartDate] = useState('2026-05-01');
   const [filterEndDate, setFilterEndDate] = useState('2026-06-30');
   const [hapCatatan, setHapCatatan] = useState('');
@@ -355,6 +356,65 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const isCashPayment = (payment: Pembayaran) => {
     const method = (payment.metode || '').toLowerCase();
     return method.includes('cash') || method.includes('tunai');
+  };
+
+  const getReportPayments = () => {
+    return payments.filter(p => {
+      if (p.status !== 'lunas') return false;
+
+      const b = bills.find(t => t.id === p.tagihan_id);
+      if (!b) return false;
+
+      if (reportFilterType === 'bulan') {
+        return b.bulan === filterBulan && b.tahun === filterTahun;
+      }
+
+      const pDateStr = p.paid_at || p.created_at || '';
+      if (!pDateStr) return false;
+      const pDate = pDateStr.substring(0, 10);
+
+      if (reportFilterType === 'tanggal') {
+        return pDate === filterSingleDate;
+      }
+
+      return pDate >= filterStartDate && pDate <= filterEndDate;
+    });
+  };
+
+  const getFinancialCategorySummary = () => {
+    const summaryMap = new Map<string, {
+      jenisId: string;
+      nama: string;
+      total: number;
+      midtrans: number;
+      cash: number;
+      transaksi: number;
+    }>();
+
+    getReportPayments().forEach((payment) => {
+      const bill = bills.find(t => t.id === payment.tagihan_id);
+      const jenisId = bill?.jenis_id || 'unknown';
+      const nama = bill ? getJenisName(bill.jenis_id) : 'Kategori Tidak Ditemukan';
+      const current = summaryMap.get(jenisId) || {
+        jenisId,
+        nama,
+        total: 0,
+        midtrans: 0,
+        cash: 0,
+        transaksi: 0
+      };
+
+      current.total += payment.nominal;
+      current.transaksi += 1;
+      if (isCashPayment(payment)) {
+        current.cash += payment.nominal;
+      } else {
+        current.midtrans += payment.nominal;
+      }
+      summaryMap.set(jenisId, current);
+    });
+
+    return Array.from(summaryMap.values()).sort((a, b) => b.total - a.total);
   };
 
   const handleOpenPupilModal = (s?: Santri) => {
@@ -1756,20 +1816,23 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       doc.text('MH', 25, 29.5, { align: 'center' });
     }
 
+    const pesantrenName = profilPP?.nama || 'Pondok Pesantren Mathlabul Hidayah Nursalam';
+    const pesantrenNameLines = doc.splitTextToSize(pesantrenName, 104).slice(0, 2);
+
     doc.setTextColor(15, 23, 42); 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text(profilPP?.nama || 'Pondok Pesantren Mathlabul Hidayah Nursalam', 42, 20);
+    doc.setFontSize(pesantrenNameLines.length > 1 ? 12 : 14);
+    doc.text(pesantrenNameLines, 42, 19);
 
     doc.setTextColor(4, 120, 87);
     doc.setFontSize(8);
-    doc.text('SISTEM INFORMASI KEUANGAN PESANTREN', 42, 25);
+    doc.text('SISTEM INFORMASI KEUANGAN PESANTREN', 42, pesantrenNameLines.length > 1 ? 28 : 25);
 
     doc.setTextColor(100, 116, 139);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text(profilPP?.tagline || 'Membentuk Generasi Qurani, Cerdas, dan Berkarakter Robbani', 42, 30);
-    doc.text(`${profilPP?.alamat || 'Jl. KH. Nursalam No. 45'} | Telp: ${profilPP?.telepon || '0231-88776655'}`, 42, 34.5, { maxWidth: 105 });
+    doc.text(profilPP?.tagline || 'Membentuk Generasi Qurani, Cerdas, dan Berkarakter Robbani', 42, pesantrenNameLines.length > 1 ? 33 : 30, { maxWidth: 104 });
+    doc.text(`${profilPP?.alamat || 'Jl. KH. Nursalam No. 45'} | Telp: ${profilPP?.telepon || '0231-88776655'}`, 42, pesantrenNameLines.length > 1 ? 38 : 34.5, { maxWidth: 104 });
 
     doc.setFillColor(240, 253, 244);
     doc.roundedRect(151, 16, 46, 19, 4, 4, 'F');
@@ -1803,31 +1866,18 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.setFontSize(8);
     
     const formattedBulan = `${filterBulan} ${filterTahun}`;
-    const formattedTanggal = `${new Date(filterStartDate).toLocaleDateString('id-ID')} s.d. ${new Date(filterEndDate).toLocaleDateString('id-ID')}`;
-    const filterDesc = reportFilterType === 'bulan' ? formattedBulan : formattedTanggal;
+    const formattedTanggal = new Date(filterSingleDate).toLocaleDateString('id-ID');
+    const formattedRentang = `${new Date(filterStartDate).toLocaleDateString('id-ID')} s.d. ${new Date(filterEndDate).toLocaleDateString('id-ID')}`;
+    const filterDesc = reportFilterType === 'bulan' ? formattedBulan : reportFilterType === 'tanggal' ? formattedTanggal : formattedRentang;
+    const filtered = getReportPayments();
+    const categorySummary = getFinancialCategorySummary();
+    const reportTypeLabel = reportFilterType === 'bulan' ? 'Bulanan Terjadwal' : reportFilterType === 'tanggal' ? 'Tanggal Harian' : 'Rentang Tanggal';
 
-    doc.text(`Tipe Laporan: ${reportFilterType === 'bulan' ? 'Bulanan Terjadwal' : 'Custom Rentang Tanggal'}`, 16, 64);
+    doc.text(`Tipe Laporan: ${reportTypeLabel}`, 16, 64);
     doc.text(`Parameter Filter: ${filterDesc}`, 16, 70);
 
     doc.text(`Dicetak Oleh: ${user?.email || 'Administrator'}`, 116, 64);
-    doc.text(`Waktu Unduh: ${new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'})} WIB`, 116, 70);
-
-    // Filter Payments
-    const filtered = payments.filter(p => {
-      if (p.status !== 'lunas') return false;
-      
-      const b = bills.find(t => t.id === p.tagihan_id);
-      if (!b) return false;
-      
-      if (reportFilterType === 'bulan') {
-        return b.bulan === filterBulan && b.tahun === filterTahun;
-      } else {
-        const pDateStr = p.paid_at || p.created_at || '';
-        if (!pDateStr) return false;
-        const pDate = pDateStr.substring(0, 10);
-        return pDate >= filterStartDate && pDate <= filterEndDate;
-      }
-    });
+    doc.text(`Kategori Masuk: ${categorySummary.length} kategori`, 116, 70);
 
     const rows = filtered.map((p, idx) => {
       const b = bills.find(t => t.id === p.tagihan_id);
@@ -1852,10 +1902,46 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     const totalRevenue = filtered.reduce((sum, item) => sum + item.nominal, 0);
     const totalMidtransRevenue = filtered.filter(p => !isCashPayment(p)).reduce((sum, item) => sum + item.nominal, 0);
     const totalCashRevenue = filtered.filter(isCashPayment).reduce((sum, item) => sum + item.nominal, 0);
+    const categoryRows = categorySummary.map((item, idx) => [
+      idx + 1,
+      item.nama,
+      item.transaksi,
+      `Rp ${item.midtrans.toLocaleString('id-ID')}`,
+      `Rp ${item.cash.toLocaleString('id-ID')}`,
+      `Rp ${item.total.toLocaleString('id-ID')}`
+    ]);
 
-    // Generate Table
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(`RINGKASAN PEMASUKAN PER KATEGORI (${categorySummary.length} KATEGORI MASUK)`, 12, 82);
+
     autoTable(doc, {
-      startY: 82,
+      startY: 86,
+      head: [['No', 'Kategori Iuran', 'Transaksi', 'Midtrans', 'Cash', 'Total Masuk']],
+      body: categoryRows,
+      theme: 'grid',
+      styles: { fontSize: 7.2, font: 'helvetica', cellPadding: 2 },
+      headStyles: { fillColor: [22, 101, 52], textColor: [255, 255, 255], fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 9, halign: 'center' },
+        2: { cellWidth: 18, halign: 'center' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right', fontStyle: 'bold' }
+      },
+      margin: { left: 12, right: 12 }
+    });
+
+    const detailTableY = ((doc as any).lastAutoTable?.finalY || 86) + 9;
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('DETAIL TRANSAKSI PEMBAYARAN LUNAS', 12, detailTableY - 3);
+
+    // Generate detail table
+    autoTable(doc, {
+      startY: detailTableY,
       head: [['No', 'ID Transaksi / Order ID', 'Nama Santri', 'Kelas', 'Peruntukan Iuran', 'Tanggal Settle', 'Metode', 'Nominal']],
       body: rows,
       theme: 'striped',
@@ -1868,12 +1954,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     });
 
     // Profit Box at bottom
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    let finalY = (doc as any).lastAutoTable.finalY + 10;
+    if (finalY > 245) {
+      doc.addPage();
+      finalY = 18;
+    }
     
     doc.setFillColor(240, 253, 250); 
-    doc.rect(112, finalY, 86, 28, 'F');
+    doc.rect(112, finalY, 86, 34, 'F');
     doc.setDrawColor(204, 251, 241);
-    doc.rect(112, finalY, 86, 28, 'D');
+    doc.rect(112, finalY, 86, 34, 'D');
 
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'normal');
@@ -1883,22 +1973,27 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.text(String(filtered.length), 190, finalY + 6, { align: 'right' });
 
     doc.setFont('helvetica', 'normal');
-    doc.text('Masuk via Midtrans:', 116, finalY + 12);
+    doc.text('Kategori Masuk:', 116, finalY + 12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Rp ${totalMidtransRevenue.toLocaleString('id-ID')}`, 190, finalY + 12, { align: 'right' });
+    doc.text(`${categorySummary.length} kategori`, 190, finalY + 12, { align: 'right' });
 
     doc.setFont('helvetica', 'normal');
-    doc.text('Masuk via Cash:', 116, finalY + 18);
+    doc.text('Masuk via Midtrans:', 116, finalY + 18);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Rp ${totalCashRevenue.toLocaleString('id-ID')}`, 190, finalY + 18, { align: 'right' });
+    doc.text(`Rp ${totalMidtransRevenue.toLocaleString('id-ID')}`, 190, finalY + 18, { align: 'right' });
 
-    doc.text('Total Penerimaan Kas:', 116, finalY + 24);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Masuk via Cash:', 116, finalY + 24);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Rp ${totalCashRevenue.toLocaleString('id-ID')}`, 190, finalY + 24, { align: 'right' });
+
+    doc.text('Total Penerimaan Kas:', 116, finalY + 30);
     doc.setTextColor(4, 120, 87);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Rp ${totalRevenue.toLocaleString('id-ID')}`, 190, finalY + 24, { align: 'right' });
+    doc.text(`Rp ${totalRevenue.toLocaleString('id-ID')}`, 190, finalY + 30, { align: 'right' });
 
     // Decorative Signatures Box at bottom
-    const sigY = finalY + 40;
+    const sigY = finalY + 46;
     if (sigY <= 265) {
       doc.setTextColor(100, 116, 139);
       doc.setFont('helvetica', 'bold');
@@ -1919,7 +2014,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     }
 
     // Save
-    const filename = `Laporan_Penerimaan_${reportFilterType === 'bulan' ? filterBulan : 'Custom'}_2026.pdf`;
+    const filename = `Laporan_Penerimaan_${reportFilterType === 'bulan' ? filterBulan : reportFilterType === 'tanggal' ? filterSingleDate : 'Rentang'}_2026.pdf`;
     doc.save(filename);
     
     setActionDoneMsg(`🎉 Sukses mengunduh rekapitulasi ${filename}!`);
@@ -3580,11 +3675,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               {/* Type Selection */}
               <div>
                 <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1.5">Tipe Laporan:</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button 
                     type="button"
                     onClick={() => setReportFilterType('bulan')}
-                    className={`py-2 px-3 rounded-lg border text-center font-bold transition-all cursor-pointer ${
+                    className={`py-2 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
                       reportFilterType === 'bulan' 
                         ? 'bg-blue-900 text-white border-blue-900' 
                         : 'bg-white text-gray-600 border-gray-200 hover:bg-slate-50'
@@ -3595,13 +3690,24 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   <button 
                     type="button"
                     onClick={() => setReportFilterType('tanggal')}
-                    className={`py-2 px-3 rounded-lg border text-center font-bold transition-all cursor-pointer ${
+                    className={`py-2 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
                       reportFilterType === 'tanggal' 
                         ? 'bg-blue-900 text-white border-blue-900' 
                         : 'bg-white text-gray-600 border-gray-200 hover:bg-slate-50'
                     }`}
                   >
-                    Custom Tanggal
+                    Tanggal
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setReportFilterType('rentang')}
+                    className={`py-2 px-2 rounded-lg border text-center font-bold transition-all cursor-pointer ${
+                      reportFilterType === 'rentang' 
+                        ? 'bg-blue-900 text-white border-blue-900' 
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Rentang
                   </button>
                 </div>
               </div>
@@ -3631,6 +3737,19 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     />
                   </div>
                 </>
+              ) : reportFilterType === 'tanggal' ? (
+                <>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1.5 font-sans">Tanggal Transaksi:</label>
+                    <input 
+                      type="date"
+                      value={filterSingleDate}
+                      onChange={(e) => setFilterSingleDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-green-500 text-gray-800"
+                    />
+                  </div>
+                  <div className="hidden md:block" />
+                </>
               ) : (
                 <>
                   <div>
@@ -3656,19 +3775,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
               {/* Informative summary of filtered set */}
               {(() => {
-                const reportPayments = payments.filter(p => {
-                    if (p.status !== 'lunas') return false;
-                    const b = bills.find(t => t.id === p.tagihan_id);
-                    if (!b) return false;
-                    if (reportFilterType === 'bulan') {
-                      return b.bulan === filterBulan && b.tahun === filterTahun;
-                    } else {
-                      const pDateStr = p.paid_at || p.created_at || '';
-                      if (!pDateStr) return false;
-                      const pDate = pDateStr.substring(0, 10);
-                      return pDate >= filterStartDate && pDate <= filterEndDate;
-                    }
-                  });
+                const reportPayments = getReportPayments();
                 const midtransTotal = reportPayments.filter(p => !isCashPayment(p)).reduce((sum, p) => sum + p.nominal, 0);
                 const cashTotal = reportPayments.filter(isCashPayment).reduce((sum, p) => sum + p.nominal, 0);
 
@@ -3692,6 +3799,106 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
             </div>
           </div>
+
+          {/* Dashboard Keuangan Per Kategori */}
+          {(() => {
+            const categorySummary = getFinancialCategorySummary();
+            const reportPayments = getReportPayments();
+            const totalMasuk = categorySummary.reduce((sum, item) => sum + item.total, 0);
+            const topCategory = categorySummary[0];
+            const chartData = categorySummary.map(item => ({
+              name: item.nama.length > 18 ? `${item.nama.substring(0, 17)}...` : item.nama,
+              fullName: item.nama,
+              Total: item.total,
+              Midtrans: item.midtrans,
+              Cash: item.cash
+            }));
+
+            return (
+              <div className="bg-white rounded-3xl p-6 border border-gray-150 space-y-5">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-gray-100 pb-4 select-none">
+                  <div className="text-left">
+                    <h4 className="font-extrabold text-gray-900 text-xs uppercase tracking-widest flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-emerald-700" /> Dashboard Keuangan Per Kategori
+                    </h4>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Pantau uang masuk berdasarkan kategori iuran yang dibuat admin, mengikuti filter tanggal/bulan di atas.</p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 w-full lg:w-auto">
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2 text-left min-w-0">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-emerald-800 block">Total Masuk</span>
+                      <span className="text-sm font-black text-emerald-700 block truncate">Rp {totalMasuk.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-100 rounded-2xl px-3 py-2 text-left min-w-0">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-blue-800 block">Kategori</span>
+                      <span className="text-sm font-black text-blue-800 block">{categorySummary.length} Masuk</span>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-100 rounded-2xl px-3 py-2 text-left min-w-0">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-amber-800 block">Transaksi</span>
+                      <span className="text-sm font-black text-amber-800 block">{reportPayments.length} Lunas</span>
+                    </div>
+                  </div>
+                </div>
+
+                {categorySummary.length === 0 ? (
+                  <div className="py-10 text-center bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400">Belum ada pemasukan pada filter laporan ini.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+                    <div className="xl:col-span-3 h-72 bg-slate-50 rounded-2xl border border-slate-100 p-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 10, right: 10, left: -12, bottom: 22 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis dataKey="name" stroke="#64748b" fontSize={10} fontWeight={700} tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={45} />
+                          <YAxis stroke="#94a3b8" fontSize={9} fontWeight={600} tickLine={false} axisLine={false} tickFormatter={(v) => `Rp ${v >= 1000000 ? `${v / 1000000}jt` : `${v / 1000}rb`}`} />
+                          <Tooltip
+                            cursor={{ fill: 'rgba(16,185,129,0.08)' }}
+                            formatter={(value, name) => [`Rp ${Number(value).toLocaleString('id-ID')}`, name]}
+                            labelFormatter={(label: string) => chartData.find(item => item.name === label)?.fullName || label}
+                          />
+                          <Bar dataKey="Total" fill="#047857" radius={[6, 6, 0, 0]} maxBarSize={42} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="xl:col-span-2 rounded-2xl border border-slate-100 overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-3 border-b border-slate-100">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rincian Kategori Masuk</span>
+                        {topCategory && (
+                          <p className="text-[11px] text-slate-400 mt-0.5">Tertinggi: <span className="font-bold text-emerald-700">{topCategory.nama}</span></p>
+                        )}
+                      </div>
+                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                        {categorySummary.map((item, idx) => (
+                          <div key={item.jenisId} className="p-4 hover:bg-slate-50 transition-all">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center text-[10px] font-black">{idx + 1}</span>
+                                  <h5 className="text-xs font-black text-slate-800 truncate">{item.nama}</h5>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1.5 font-semibold">{item.transaksi} transaksi lunas</p>
+                              </div>
+                              <span className="text-xs font-black text-emerald-700 whitespace-nowrap">Rp {item.total.toLocaleString('id-ID')}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-3 text-[10px] font-bold">
+                              <div className="bg-blue-50 text-blue-800 rounded-xl px-3 py-2 border border-blue-100">
+                                Midtrans<br/><span className="font-black">Rp {item.midtrans.toLocaleString('id-ID')}</span>
+                              </div>
+                              <div className="bg-amber-50 text-amber-800 rounded-xl px-3 py-2 border border-amber-100">
+                                Cash<br/><span className="font-black">Rp {item.cash.toLocaleString('id-ID')}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Card: Riwayat Log Pembayaran Masuk (Kas Masuk) */}
           <div className="bg-white rounded-3xl p-6 border border-gray-150 space-y-4">
