@@ -167,6 +167,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [cfgPaymentSearch, setCfgPaymentSearch] = useState('');
   const [rekapSubTab, setRekapSubTab] = useState<'riwayat' | 'tagihan_tersebar'>('riwayat');
   const [cancelTargetId, setCancelTargetId] = useState('');
+  const [cashInstallmentModal, setCashInstallmentModal] = useState<{
+    isOpen: boolean;
+    tagihanId: string;
+    nominalText: string;
+    error?: string;
+  } | null>(null);
 
   // States for dynamic CSV/Excel Santri & Wali Import
   const [showImportForm, setShowImportForm] = useState(false);
@@ -318,6 +324,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
   const getJenisName = (id: string) => {
     return jPembayaranList.find(j => j.id === id)?.nama || 'Jenis Pembayaran';
+  };
+
+  const isCashPayment = (payment: Pembayaran) => {
+    const method = (payment.metode || '').toLowerCase();
+    return method.includes('cash') || method.includes('tunai');
   };
 
   const handleOpenPupilModal = (s?: Santri) => {
@@ -1569,6 +1580,102 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     }
   };
 
+  const handleOpenCashInstallmentModal = (tagihanId: string) => {
+    const tRecord = bills.find(t => t.id === tagihanId) || dbLocal.getTagihan().find(t => t.id === tagihanId);
+    if (!tRecord) {
+      setActionDoneMsg('Tagihan tidak ditemukan.');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+      return;
+    }
+
+    if (tRecord.status !== 'pending') {
+      setActionDoneMsg('Tagihan ini sudah lunas, tidak perlu cicilan cash lagi.');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+      return;
+    }
+
+    setCashInstallmentModal({
+      isOpen: true,
+      tagihanId,
+      nominalText: '',
+      error: undefined
+    });
+  };
+
+  const handleCashInstallmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cashInstallmentModal) return;
+
+    const tRecord = bills.find(t => t.id === cashInstallmentModal.tagihanId) || dbLocal.getTagihan().find(t => t.id === cashInstallmentModal.tagihanId);
+    if (!tRecord) {
+      setCashInstallmentModal(prev => prev ? { ...prev, error: 'Tagihan tidak ditemukan.' } : prev);
+      return;
+    }
+
+    const paidAmount = Number(cashInstallmentModal.nominalText.replace(/[^\d]/g, ''));
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      setCashInstallmentModal(prev => prev ? { ...prev, error: 'Nominal cicilan cash wajib lebih dari Rp 0.' } : prev);
+      return;
+    }
+
+    if (paidAmount > Number(tRecord.nominal)) {
+      setCashInstallmentModal(prev => prev ? { ...prev, error: `Nominal cicilan tidak boleh melebihi sisa tagihan Rp ${tRecord.nominal.toLocaleString('id-ID')}.` } : prev);
+      return;
+    }
+
+    const remaining = Math.max(Number(tRecord.nominal) - paidAmount, 0);
+    const nextStatus = remaining > 0 ? 'pending' : 'lunas';
+
+    try {
+      const orderId = `CSC-${Date.now()}`;
+      const { error: payErr } = await supabase.from('pembayaran').insert({
+        tagihan_id: tRecord.id,
+        nominal: paidAmount,
+        status: 'lunas',
+        metode: remaining > 0 ? 'CASH / Tunai (Cicilan)' : 'CASH / Tunai (Pelunasan)',
+        order_id: orderId,
+        paid_at: new Date().toISOString()
+      });
+      if (payErr) throw payErr;
+
+      const { error: tagihanErr } = await supabase
+        .from('tagihan')
+        .update({
+          nominal: remaining > 0 ? remaining : tRecord.nominal,
+          status: nextStatus
+        })
+        .eq('id', tRecord.id);
+      if (tagihanErr) throw tagihanErr;
+
+      const sInfo = santriList.find(s => s.id === tRecord.santri_id) || dbLocal.getSantri().find(s => s.id === tRecord.santri_id);
+      const jInfo = jPembayaranList.find(j => j.id === tRecord.jenis_id) || dbLocal.getJenisPembayaran().find(j => j.id === tRecord.jenis_id);
+      if (sInfo && sInfo.wali_id) {
+        const payName = jInfo ? jInfo.nama : 'Iuran';
+        await dbLocal.insertNotification({
+          user_id: sInfo.wali_id,
+          judul: remaining > 0 ? 'Cicilan Cash Diterima' : 'Tagihan Cash Lunas',
+          pesan: remaining > 0
+            ? `Pembayaran cicilan cash ${payName} bulan ${tRecord.bulan} ${tRecord.tahun} sebesar Rp ${paidAmount.toLocaleString('id-ID')} untuk ${sInfo.nama} telah diterima. Sisa tagihan: Rp ${remaining.toLocaleString('id-ID')}.`
+            : `Alhamdulillah, pembayaran cash ${payName} bulan ${tRecord.bulan} ${tRecord.tahun} sebesar Rp ${paidAmount.toLocaleString('id-ID')} untuk ${sInfo.nama} telah melunasi tagihan.`,
+          tipe: 'pembayaran',
+          ref_id: tRecord.id,
+          is_read: false
+        });
+      }
+
+      await refreshAdminData();
+      setCashInstallmentModal(null);
+      setActionDoneMsg(
+        remaining > 0
+          ? `Cicilan cash tercatat. Sisa tagihan sekarang Rp ${remaining.toLocaleString('id-ID')}.`
+          : 'Cicilan cash tercatat dan tagihan otomatis LUNAS.'
+      );
+      setTimeout(() => setActionDoneMsg(null), 4000);
+    } catch (err: any) {
+      setCashInstallmentModal(prev => prev ? { ...prev, error: `Gagal menyimpan cicilan: ${err.message || err}` } : prev);
+    }
+  };
+
   // 3. Collect & Format Monthly Analytics Data for the Chart (Jan - Dec 2026)
   const getChartData = () => {
     const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -1693,6 +1800,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     });
 
     const totalRevenue = filtered.reduce((sum, item) => sum + item.nominal, 0);
+    const totalMidtransRevenue = filtered.filter(p => !isCashPayment(p)).reduce((sum, item) => sum + item.nominal, 0);
+    const totalCashRevenue = filtered.filter(isCashPayment).reduce((sum, item) => sum + item.nominal, 0);
 
     // Generate Table
     autoTable(doc, {
@@ -1712,24 +1821,34 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     
     doc.setFillColor(240, 253, 250); 
-    doc.rect(130, finalY, 68, 16, 'F');
+    doc.rect(112, finalY, 86, 28, 'F');
     doc.setDrawColor(204, 251, 241);
-    doc.rect(130, finalY, 68, 16, 'D');
+    doc.rect(112, finalY, 86, 28, 'D');
 
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.text('Jumlah Transaksi Lunas:', 134, finalY + 6);
+    doc.setFontSize(8);
+    doc.text('Jumlah Transaksi Lunas:', 116, finalY + 6);
     doc.setFont('helvetica', 'bold');
-    doc.text(String(filtered.length), 188, finalY + 6, { align: 'right' });
+    doc.text(String(filtered.length), 190, finalY + 6, { align: 'right' });
 
-    doc.text('Total Penerimaan Kas:', 134, finalY + 11.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Masuk via Midtrans:', 116, finalY + 12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Rp ${totalMidtransRevenue.toLocaleString('id-ID')}`, 190, finalY + 12, { align: 'right' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.text('Masuk via Cash:', 116, finalY + 18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Rp ${totalCashRevenue.toLocaleString('id-ID')}`, 190, finalY + 18, { align: 'right' });
+
+    doc.text('Total Penerimaan Kas:', 116, finalY + 24);
     doc.setTextColor(4, 120, 87);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Rp ${totalRevenue.toLocaleString('id-ID')}`, 188, finalY + 11.5, { align: 'right' });
+    doc.text(`Rp ${totalRevenue.toLocaleString('id-ID')}`, 190, finalY + 24, { align: 'right' });
 
     // Decorative Signatures Box at bottom
-    const sigY = finalY + 28;
+    const sigY = finalY + 40;
     if (sigY <= 265) {
       doc.setTextColor(100, 116, 139);
       doc.setFont('helvetica', 'bold');
@@ -3203,7 +3322,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     <th className="px-5 py-3.5">Nominal</th>
                     <th className="px-5 py-3.5 text-center">Status</th>
                     <th className="px-5 py-3.5 text-center">Tanggal Dibuat</th>
-                    <th className="px-5 py-3.5 text-center w-40">Aksi / Kontrol</th>
+                    <th className="px-5 py-3.5 text-center w-56">Aksi / Kontrol</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-semibold text-gray-650">
@@ -3276,14 +3395,24 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                           <td className="px-5 py-3 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1.5 font-sans whitespace-nowrap">
                               {b.status === 'pending' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleManualSettleCash(b.id)}
-                                  className="px-2 py-1 bg-green-700 hover:bg-green-800 text-white rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 text-[9px] font-extrabold shadow-xs whitespace-nowrap"
-                                  title="Tandai lunas cash / manual"
-                                >
-                                  <Check className="w-3.5 h-3.5" /> Lunas Cash
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenCashInstallmentModal(b.id)}
+                                    className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 text-[9px] font-extrabold shadow-xs whitespace-nowrap"
+                                    title="Catat cicilan cash / tunai"
+                                  >
+                                    <DollarSign className="w-3.5 h-3.5" /> Cicil Cash
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleManualSettleCash(b.id)}
+                                    className="px-2 py-1 bg-green-700 hover:bg-green-800 text-white rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 text-[9px] font-extrabold shadow-xs whitespace-nowrap"
+                                    title="Tandai lunas cash / manual"
+                                  >
+                                    <Check className="w-3.5 h-3.5" /> Lunas Cash
+                                  </button>
+                                </>
                               )}
                               
                               <button
@@ -3476,10 +3605,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               )}
 
               {/* Informative summary of filtered set */}
-              <div className="flex flex-col justify-center items-start p-3 bg-slate-50 border border-gray-150 rounded-2xl select-none">
-                <span className="text-[9px] font-bold text-gray-450 uppercase tracking-widest">Transaksi Siap Cetak</span>
-                <span className="text-sm font-black text-emerald-700 mt-1">
-                  {payments.filter(p => {
+              {(() => {
+                const reportPayments = payments.filter(p => {
                     if (p.status !== 'lunas') return false;
                     const b = bills.find(t => t.id === p.tagihan_id);
                     if (!b) return false;
@@ -3491,9 +3618,27 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                       const pDate = pDateStr.substring(0, 10);
                       return pDate >= filterStartDate && pDate <= filterEndDate;
                     }
-                  }).length} Lunas / Settled
-                </span>
-              </div>
+                  });
+                const midtransTotal = reportPayments.filter(p => !isCashPayment(p)).reduce((sum, p) => sum + p.nominal, 0);
+                const cashTotal = reportPayments.filter(isCashPayment).reduce((sum, p) => sum + p.nominal, 0);
+
+                return (
+                  <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50 border border-gray-150 rounded-2xl select-none">
+                    <div>
+                      <span className="text-[9px] font-bold text-gray-450 uppercase tracking-widest block">Siap Cetak</span>
+                      <span className="text-sm font-black text-emerald-700 mt-1 block">{reportPayments.length} Lunas</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-gray-450 uppercase tracking-widest block">Midtrans</span>
+                      <span className="text-xs font-black text-blue-800 mt-1 block">Rp {midtransTotal.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-gray-450 uppercase tracking-widest block">Cash</span>
+                      <span className="text-xs font-black text-amber-700 mt-1 block">Rp {cashTotal.toLocaleString('id-ID')}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
           </div>
@@ -3665,6 +3810,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     <th className="px-4 py-3">Iuran</th>
                     <th className="px-4 py-3">Nominal</th>
                     <th className="px-4 py-3 text-right">Status Settle</th>
+                    <th className="px-4 py-3 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
@@ -3683,6 +3829,20 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                         }`}>
                           {b.status}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {b.status === 'pending' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCashInstallmentModal(b.id)}
+                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[9px] font-extrabold cursor-pointer transition-all active:scale-95 shadow-xs whitespace-nowrap"
+                            title="Catat cicilan cash / tunai"
+                          >
+                            <DollarSign className="w-3.5 h-3.5" /> Cicil Cash
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-300 font-bold">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -5166,6 +5326,100 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           </form>
         </div>
       )}
+
+      {/* Cash installment modal */}
+      {cashInstallmentModal && cashInstallmentModal.isOpen && (() => {
+        const bill = bills.find(b => b.id === cashInstallmentModal.tagihanId) || dbLocal.getTagihan().find(b => b.id === cashInstallmentModal.tagihanId);
+        const student = bill ? santriList.find(s => s.id === bill.santri_id) : null;
+        const jenisName = bill ? getJenisName(bill.jenis_id) : 'Iuran';
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+            <form onSubmit={handleCashInstallmentSubmit} className="bg-white rounded-3xl p-6 max-w-md w-full border border-gray-150 shadow-xl space-y-4 text-left">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-700">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-xs uppercase tracking-widest text-slate-900">Cicil Cash Tagihan</h4>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Catat pembayaran tunai sebagian</p>
+                </div>
+              </div>
+
+              {bill ? (
+                <div className="grid grid-cols-2 gap-3 text-[10px]">
+                  <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3">
+                    <span className="block font-black uppercase text-slate-400 tracking-wider">Santri</span>
+                    <span className="block text-xs font-extrabold text-slate-800 mt-1">{student?.nama || 'N/A'}</span>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3">
+                    <span className="block font-black uppercase text-slate-400 tracking-wider">Sisa Tagihan</span>
+                    <span className="block text-xs font-extrabold text-emerald-700 mt-1">Rp {bill.nominal.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="col-span-2 rounded-2xl bg-slate-50 border border-slate-100 p-3">
+                    <span className="block font-black uppercase text-slate-400 tracking-wider">Peruntukan</span>
+                    <span className="block text-xs font-extrabold text-slate-800 mt-1">{jenisName} - {bill.bulan} {bill.tahun}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-red-50 border border-red-100 text-red-700 rounded-xl text-xs font-bold">
+                  Tagihan tidak ditemukan.
+                </div>
+              )}
+
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1.5">Nominal Cash Diterima:</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">Rp</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={cashInstallmentModal.nominalText}
+                    onChange={(e) => {
+                      const rawDigits = e.target.value.replace(/[^\d]/g, '');
+                      setCashInstallmentModal(prev => prev ? {
+                        ...prev,
+                        nominalText: rawDigits ? Number(rawDigits).toLocaleString('id-ID') : '',
+                        error: undefined
+                      } : prev);
+                    }}
+                    placeholder="Contoh: 250.000"
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold font-mono text-zinc-800 focus:ring-1 focus:ring-amber-500 outline-none"
+                    autoFocus
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5 font-semibold">
+                  Setelah disimpan, nominal tagihan otomatis dikurangi sesuai uang cash yang diterima.
+                </p>
+              </div>
+
+              {cashInstallmentModal.error && (
+                <div className="p-3 bg-red-50 border border-red-150 text-[10.5px] text-red-700 rounded-xl leading-normal font-bold">
+                  {cashInstallmentModal.error}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCashInstallmentModal(null)}
+                  className="px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[11px] rounded-xl cursor-pointer select-none transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={!bill}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] rounded-xl cursor-pointer select-none transition-all shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Simpan Cicilan Cash
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      })()}
 
       {/* Dynamic Custom Confirm Modal */}
       {confirmModal && confirmModal.isOpen && (
