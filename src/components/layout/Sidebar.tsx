@@ -25,6 +25,7 @@ export function Sidebar({ role, activeMenu, setActiveMenu, onLogout, isOpen = fa
           { id: 'santri', name: 'Manajemen Santri', icon: Users },
           { id: 'pelanggaran', name: 'Data Pelanggaran', icon: ShieldAlert },
           { id: 'hapalan', name: 'Data Hapalan', icon: BookOpen },
+          { id: 'raport', name: 'Kelola Raport', icon: FileText },
           { id: 'pembayaran_config', name: 'Atur & Monitoring Tagihan', icon: Settings },
           { id: 'rekap_pembayaran', name: 'Rekap Bayar', icon: DollarSign },
           { id: 'cms', name: 'Manajemen Konten', icon: Newspaper },
@@ -37,6 +38,7 @@ export function Sidebar({ role, activeMenu, setActiveMenu, onLogout, isOpen = fa
           { id: 'santri_binaan', name: 'Santri Binaan', icon: Users },
           { id: 'input_pelanggaran', name: 'Input Pelanggaran', icon: ShieldAlert },
           { id: 'input_hapalan', name: 'Input Hafalan', icon: BookOpen },
+          { id: 'raport', name: 'Input Raport', icon: FileText },
           { id: 'rekap_santri', name: 'Monitoring Santri', icon: Scroll },
           { id: 'profil', name: 'Profil Akun', icon: User },
         ];
@@ -47,6 +49,7 @@ export function Sidebar({ role, activeMenu, setActiveMenu, onLogout, isOpen = fa
           { id: 'profil_santri', name: 'Profil Santri', icon: GraduationCap },
           { id: 'pelanggaran', name: 'Laporan Pelanggaran', icon: ShieldAlert },
           { id: 'hapalan', name: 'Progres Hafalan', icon: BookOpen },
+          { id: 'raport', name: 'Raport Santri', icon: FileText },
           { id: 'tagihan', name: 'Tagihan SPP', icon: CreditCard },
           { id: 'riwayat', name: 'Riwayat Bayar', icon: History },
           { id: 'profil_akun', name: 'Profil Wali', icon: User },

@@ -17,6 +17,7 @@ import { HapalanProgressCard } from '../shared/HapalanProgressCard';
 import { MidtransButton } from '../shared/MidtransButton';
 import { BuktiPembayaran } from '../shared/BuktiPembayaran';
 import { ImageUploader } from '../shared/ImageUploader';
+import { RaportPanel } from '../raport/RaportPanel';
 
 const PRESET_AVATARS = [
   { id: 'av-1', name: 'Ayah Kurniawan', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=120&q=80' },
@@ -1053,6 +1054,10 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
                 )}
               </div>
             </div>
+          )}
+
+          {activeTab === 'raport' && (
+            <RaportPanel mode="wali" />
           )}
 
           {/* Tab 5: List/Billing invoices */}

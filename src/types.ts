@@ -64,6 +64,63 @@ export interface KategoriHapalan {
   created_at?: string;
 }
 
+export type SemesterRaport = 'ganjil' | 'genap';
+export type KategoriMapel = 'diniyah' | 'umum';
+export type StatusRaport = 'draft' | 'published';
+
+export interface KelasRaport {
+  id: string;
+  nama_kelas: string;
+  tahun_ajaran: string;
+  wali_kelas_id?: string;
+  created_at?: string;
+}
+
+export interface MataPelajaran {
+  id: string;
+  nama_pelajaran: string;
+  kategori: KategoriMapel;
+  created_at?: string;
+}
+
+export interface KelasSantri {
+  id: string;
+  kelas_id: string;
+  santri_id: string;
+  semester: SemesterRaport;
+  tahun_ajaran: string;
+}
+
+export interface KelasMapel {
+  id: string;
+  kelas_id: string;
+  mapel_id: string;
+  guru_id?: string;
+}
+
+export interface NilaiSantri {
+  id: string;
+  santri_id: string;
+  kelas_mapel_id: string;
+  semester: SemesterRaport;
+  tahun_ajaran: string;
+  nilai_harian?: number | null;
+  nilai_uas?: number | null;
+  nilai_akhir?: number | null;
+  catatan_guru?: string;
+}
+
+export interface Raport {
+  id: string;
+  santri_id: string;
+  kelas_id: string;
+  semester: SemesterRaport;
+  tahun_ajaran: string;
+  catatan_wali_kelas?: string;
+  status: StatusRaport;
+  published_at?: string;
+}
+
 export interface SetoranHapalan {
   id: string;
   santri_id: string;

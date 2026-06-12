@@ -1,4 +1,4 @@
-import React, { useState, useTransition } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
 import { read, utils, write } from 'xlsx';
 import { 
   Users, ShieldAlert, BookOpen, CreditCard, History, Settings, 
@@ -21,11 +21,39 @@ import {
 } from '../../types';
 import { ImageUploader } from '../shared/ImageUploader';
 import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
+import { RaportPanel } from '../raport/RaportPanel';
 
 export interface AdminDashboardProps {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
 }
+
+type SanctionRule = {
+  id: 'aman' | 'pembinaan' | 'takzir';
+  title: string;
+  min: number;
+  max: number | null;
+  desc: string;
+  tone: 'emerald' | 'amber' | 'red';
+};
+
+const DEFAULT_SANCTION_RULES: SanctionRule[] = [
+  { id: 'aman', title: 'Aman', min: 0, max: 24, desc: 'Pemantauan rutin wali kelas dan guru pembina.', tone: 'emerald' },
+  { id: 'pembinaan', title: 'Pembinaan', min: 25, max: 49, desc: 'Pemanggilan santri, nasihat tertulis, dan monitoring perilaku.', tone: 'amber' },
+  { id: 'takzir', title: 'Kritis / Takzir', min: 50, max: null, desc: 'Tindak lanjut takzir, pemanggilan wali, atau rapat kedisiplinan.', tone: 'red' }
+];
+
+const createClientUuid = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    const value = char === 'x' ? random : (random & 0x3 | 0x8);
+    return value.toString(16);
+  });
+};
 
 const loadImageAsDataUrl = (src: string): Promise<string | null> => {
   return new Promise((resolve) => {
@@ -251,6 +279,33 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [pelanggaranLogTab, setPelanggaranLogTab] = useState<'riwayat' | 'kamus' | 'sanksi'>('riwayat');
   const [pelanggaranKelasFilter, setPelanggaranKelasFilter] = useState('semua');
   const [pelanggaranLevelFilter, setPelanggaranLevelFilter] = useState<'semua' | 'ringan' | 'sedang' | 'berat'>('semua');
+  const [newViolationName, setNewViolationName] = useState('');
+  const [newViolationDesc, setNewViolationDesc] = useState('');
+  const [newViolationCategory, setNewViolationCategory] = useState<'ringan' | 'sedang' | 'berat'>('ringan');
+  const [newViolationPoint, setNewViolationPoint] = useState<number>(5);
+  const [sanctionRules, setSanctionRules] = useState<SanctionRule[]>(DEFAULT_SANCTION_RULES);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('mh_sanction_rules');
+      if (stored) {
+        const parsed = JSON.parse(stored) as SanctionRule[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSanctionRules(parsed);
+        }
+      }
+    } catch (_err) {
+      setSanctionRules(DEFAULT_SANCTION_RULES);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('mh_sanction_rules', JSON.stringify(sanctionRules));
+    } catch (_err) {
+      // Browser storage can be unavailable in some privacy modes.
+    }
+  }, [sanctionRules]);
 
   // Forms: Account Create/Edit
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -2179,6 +2234,80 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     return vJenisList.find(jp => jp.id === id)?.nama || 'Pelanggaran';
   };
 
+  const getSanctionRuleForPoint = (point: number) => {
+    return sanctionRules.find(rule => point >= rule.min && (rule.max === null || point <= rule.max)) || sanctionRules[sanctionRules.length - 1] || DEFAULT_SANCTION_RULES[0];
+  };
+
+  const handleSaveJenisPelanggaran = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nama = newViolationName.trim();
+    if (!nama) {
+      setActionDoneMsg('Nama jenis pelanggaran wajib diisi.');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+      return;
+    }
+
+    if (vJenisList.some(j => j.nama.toLowerCase() === nama.toLowerCase())) {
+      setActionDoneMsg('Jenis pelanggaran dengan nama tersebut sudah ada.');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+      return;
+    }
+
+    try {
+      const newJenis: JenisPelanggaran = {
+        id: createClientUuid(),
+        nama,
+        deskripsi: newViolationDesc.trim() || undefined,
+        poin_default: Math.max(1, Number(newViolationPoint) || 1),
+        kategori: newViolationCategory,
+        is_active: true
+      };
+
+      dbLocal.setJenisPelanggaran([...vJenisList, newJenis]);
+      setVJenisList(prev => [...prev, newJenis]);
+      setNewViolationName('');
+      setNewViolationDesc('');
+      setNewViolationCategory('ringan');
+      setNewViolationPoint(5);
+      setActionDoneMsg('Jenis pelanggaran baru berhasil ditambahkan.');
+      setTimeout(() => setActionDoneMsg(null), 3000);
+    } catch (err: any) {
+      setActionDoneMsg(`Gagal menambahkan jenis pelanggaran: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
+  };
+
+  const handleDeleteJenisPelanggaran = (id: string) => {
+    const isUsed = violationsList.some(v => v.jenis_id === id);
+    triggerConfirm(
+      'Hapus Jenis Pelanggaran',
+      isUsed
+        ? 'Jenis pelanggaran ini sudah dipakai di riwayat. Jika dihapus, riwayat lama bisa kehilangan referensi jenisnya. Lanjutkan?'
+        : 'Yakin ingin menghapus jenis pelanggaran ini dari kamus?',
+      () => {
+        try {
+          const nextJenis = vJenisList.filter(jenis => jenis.id !== id);
+          dbLocal.setJenisPelanggaran(nextJenis);
+          setVJenisList(nextJenis);
+          setActionDoneMsg('Jenis pelanggaran berhasil dihapus.');
+        } catch (err: any) {
+          setActionDoneMsg(`Gagal menghapus jenis pelanggaran: ${err.message || err}`);
+        }
+        setTimeout(() => setActionDoneMsg(null), 4000);
+      }
+    );
+  };
+
+  const updateSanctionRule = (ruleId: SanctionRule['id'], patch: Partial<SanctionRule>) => {
+    setSanctionRules(prev => prev.map(rule => rule.id === ruleId ? { ...rule, ...patch } : rule));
+  };
+
+  const resetSanctionRules = () => {
+    setSanctionRules(DEFAULT_SANCTION_RULES);
+    setActionDoneMsg('Aturan sanksi dikembalikan ke default.');
+    setTimeout(() => setActionDoneMsg(null), 3000);
+  };
+
   const handleOpenPelanggaranModal = () => {
     setPetSId(santriList[0]?.id || '');
     setPetJenisId(vJenisList[0]?.id || '');
@@ -2848,8 +2977,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   const records = violationsList.filter(v => v.santri_id === santri.id);
                   const totalPoin = records.filter(v => v.status === 'aktif').reduce((sum, item) => sum + item.poin, 0);
                   const latest = records.slice().sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
-                  const statusLabel = totalPoin >= 50 ? 'Kritis' : totalPoin >= 25 ? 'Pembinaan' : 'Aman';
-                  return { santri, records, totalPoin, latest, statusLabel };
+                  const sanctionRule = getSanctionRuleForPoint(totalPoin);
+                  return { santri, records, totalPoin, latest, sanctionRule };
                 }).filter(item => {
                   if (item.records.length === 0) return false;
                   if (search) {
@@ -2936,11 +3065,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                               <div className="text-right">
                                 <span className="text-[9px] text-slate-400 font-black uppercase block">Sanksi Aktif</span>
                                 <span className={`text-sm font-black block ${
-                                  item.statusLabel === 'Kritis' ? 'text-red-600' :
-                                  item.statusLabel === 'Pembinaan' ? 'text-amber-600' :
+                                  item.sanctionRule.tone === 'red' ? 'text-red-600' :
+                                  item.sanctionRule.tone === 'amber' ? 'text-amber-600' :
                                   'text-emerald-600'
                                 }`}>
-                                  {item.statusLabel}
+                                  {item.sanctionRule.title}
                                 </span>
                                 <span className="text-[11px] text-slate-400 font-black">{item.totalPoin} Poin</span>
                               </div>
@@ -2976,7 +3105,71 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               })()}
 
               {pelanggaranLogTab === 'kamus' && (
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                  <form onSubmit={handleSaveJenisPelanggaran} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 h-max">
+                    <div className="border-b border-slate-100 pb-3">
+                      <h4 className="font-black text-slate-800 text-xs uppercase tracking-widest">Tambah Jenis Pelanggaran</h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Atur nama pelanggaran, kategori, dan bobot poin default.</p>
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Jenis Pelanggaran</label>
+                      <input
+                        type="text"
+                        value={newViolationName}
+                        onChange={(e) => setNewViolationName(e.target.value)}
+                        placeholder="Contoh: Terlambat shalat berjamaah"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Deskripsi / Catatan Aturan</label>
+                      <textarea
+                        rows={3}
+                        value={newViolationDesc}
+                        onChange={(e) => setNewViolationDesc(e.target.value)}
+                        placeholder="Tuliskan batasan pelanggaran dan contoh kasusnya..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 resize-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Kategori</label>
+                        <select
+                          value={newViolationCategory}
+                          onChange={(e) => setNewViolationCategory(e.target.value as any)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 capitalize"
+                        >
+                          <option value="ringan">Ringan</option>
+                          <option value="sedang">Sedang</option>
+                          <option value="berat">Berat</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Bobot Poin</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={newViolationPoint}
+                          onChange={(e) => setNewViolationPoint(Number(e.target.value))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800 font-mono"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-sm transition-all flex items-center justify-center gap-2 active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" /> Simpan Jenis Pelanggaran
+                    </button>
+                  </form>
+
+                <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
                   <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
                     <h4 className="font-black text-slate-800 text-xs uppercase tracking-widest">Kamus Pelanggaran</h4>
                     <p className="text-[11px] text-slate-400 mt-0.5">Daftar jenis pelanggaran, kategori, dan bobot poin default.</p>
@@ -2999,36 +3192,104 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                         </div>
                         <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
                           <span className="text-slate-400 font-bold">Poin default</span>
-                          <span className="font-black text-rose-600">{jenis.poin_default} poin</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-rose-600">{jenis.poin_default} poin</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteJenisPelanggaran(jenis.id)}
+                              className="p-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg cursor-pointer"
+                              title="Hapus jenis pelanggaran"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
+                </div>
               )}
 
               {pelanggaranLogTab === 'sanksi' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {[
-                    { title: 'Aman', range: '0 - 24 poin', tone: 'emerald', desc: 'Pemantauan rutin wali kelas dan guru pembina.' },
-                    { title: 'Pembinaan', range: '25 - 49 poin', tone: 'amber', desc: 'Pemanggilan santri, nasihat tertulis, dan monitoring perilaku.' },
-                    { title: 'Kritis / Takzir', range: '50+ poin', tone: 'red', desc: 'Tindak lanjut takzir, pemanggilan wali, atau rapat kedisiplinan.' }
-                  ].map((rule) => (
-                    <div key={rule.title} className={`rounded-2xl p-5 border ${
-                      rule.tone === 'red' ? 'bg-red-50 border-red-100' :
-                      rule.tone === 'amber' ? 'bg-amber-50 border-amber-100' :
-                      'bg-emerald-50 border-emerald-100'
-                    }`}>
-                      <Shield className={`w-5 h-5 mb-4 ${
-                        rule.tone === 'red' ? 'text-red-600' :
-                        rule.tone === 'amber' ? 'text-amber-600' :
-                        'text-emerald-600'
-                      }`} />
-                      <h5 className="font-black text-slate-800 text-sm">{rule.title}</h5>
-                      <p className="text-xs font-black text-slate-500 mt-1">{rule.range}</p>
-                      <p className="text-[11px] text-slate-500 leading-relaxed mt-3">{rule.desc}</p>
+                <div className="space-y-4">
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-black text-slate-800 text-xs uppercase tracking-widest">Konfigurasi Aturan Sanksi</h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Atur ambang poin dan tindakan sanksi. Perubahan ini langsung dipakai di status riwayat dan analitik.</p>
                     </div>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={resetSanctionRules}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer"
+                    >
+                      Reset Default
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {sanctionRules.map((rule) => (
+                      <div key={rule.id} className={`rounded-2xl p-5 border space-y-4 ${
+                        rule.tone === 'red' ? 'bg-red-50 border-red-100' :
+                        rule.tone === 'amber' ? 'bg-amber-50 border-amber-100' :
+                        'bg-emerald-50 border-emerald-100'
+                      }`}>
+                        <div className="flex items-start gap-3">
+                          <Shield className={`w-5 h-5 mt-0.5 ${
+                            rule.tone === 'red' ? 'text-red-600' :
+                            rule.tone === 'amber' ? 'text-amber-600' :
+                            'text-emerald-600'
+                          }`} />
+                          <div className="flex-1">
+                            <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Nama Sanksi</label>
+                            <input
+                              type="text"
+                              value={rule.title}
+                              onChange={(e) => updateSanctionRule(rule.id, { title: e.target.value })}
+                              className="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800"
+                            />
+                            <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                              {rule.min} - {rule.max === null ? 'seterusnya' : rule.max} poin
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Min Poin</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={rule.min}
+                              onChange={(e) => updateSanctionRule(rule.id, { min: Number(e.target.value) })}
+                              className="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Max Poin</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={rule.max ?? ''}
+                              placeholder="Tanpa batas"
+                              onChange={(e) => updateSanctionRule(rule.id, { max: e.target.value === '' ? null : Number(e.target.value) })}
+                              className="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Aturan / Tindakan Sanksi</label>
+                          <textarea
+                            rows={4}
+                            value={rule.desc}
+                            onChange={(e) => updateSanctionRule(rule.id, { desc: e.target.value })}
+                            className="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 resize-none"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -3042,6 +3303,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               santri: s,
               poin: violationsList.filter(v => v.santri_id === s.id && v.status === 'aktif').reduce((sum, v) => sum + v.poin, 0)
             })).sort((a, b) => b.poin - a.poin)[0];
+            const topRule = getSanctionRuleForPoint(topStudent?.poin || 0);
 
             const monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
             const trendMap = monthShort.map((name, idx) => ({
@@ -3105,6 +3367,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     </div>
                     <p className="text-2xl font-black text-red-600 mt-5">{topStudent?.poin ? `${topStudent.poin}p` : '-'}</p>
                     {topStudent?.poin ? <p className="text-[10px] text-slate-500 font-bold mt-1 truncate">{topStudent.santri.nama}</p> : null}
+                    {topStudent?.poin ? <p className="text-[10px] text-red-500 font-black mt-0.5 truncate">{topRule.title}</p> : null}
                   </div>
                 </div>
 
@@ -3376,6 +3639,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'raport' && (
+        <RaportPanel mode="admin" />
       )}
 
       {/* Tab: Create bulking billing tagihans */}

@@ -5,6 +5,11 @@ import {
   JenisPembayaran,
   KategoriHapalan,
   Notifikasi,
+  KelasMapel,
+  KelasRaport,
+  KelasSantri,
+  MataPelajaran,
+  NilaiSantri,
   Pembayaran,
   Pelanggaran,
   Pengumuman,
@@ -13,6 +18,7 @@ import {
   Program,
   ProgressHapalan,
   PSB,
+  Raport,
   Santri,
   SetoranHapalan,
   Tagihan
@@ -97,7 +103,13 @@ export const db = {
   tagihan: () => fetchTable<Tagihan>('tagihan'),
   pembayaran: () => fetchTable<Pembayaran>('pembayaran'),
   notifikasi: () => fetchTable<Notifikasi>('notifikasi'),
-  pengumuman: () => fetchTable<Pengumuman>('pengumuman')
+  pengumuman: () => fetchTable<Pengumuman>('pengumuman'),
+  raportKelas: () => fetchTable<KelasRaport>('kelas'),
+  mataPelajaran: () => fetchTable<MataPelajaran>('mata_pelajaran'),
+  kelasSantri: () => fetchTable<KelasSantri>('kelas_santri'),
+  kelasMapel: () => fetchTable<KelasMapel>('kelas_mapel'),
+  nilaiSantri: () => fetchTable<NilaiSantri>('nilai_santri'),
+  raport: () => fetchTable<Raport>('raport')
 };
 
 export async function insertNotification(notif: Omit<Notifikasi, 'id' | 'created_at'>) {
@@ -128,6 +140,12 @@ type SupabaseCache = {
   pembayaran: Pembayaran[];
   notifikasi: Notifikasi[];
   pengumuman: Pengumuman[];
+  kelas: KelasRaport[];
+  mata_pelajaran: MataPelajaran[];
+  kelas_santri: KelasSantri[];
+  kelas_mapel: KelasMapel[];
+  nilai_santri: NilaiSantri[];
+  raport: Raport[];
 };
 
 const cache: SupabaseCache = {
@@ -147,7 +165,13 @@ const cache: SupabaseCache = {
   tagihan: [],
   pembayaran: [],
   notifikasi: [],
-  pengumuman: []
+  pengumuman: [],
+  kelas: [],
+  mata_pelajaran: [],
+  kelas_santri: [],
+  kelas_mapel: [],
+  nilai_santri: [],
+  raport: []
 };
 
 export async function refreshSupabaseCache() {
@@ -168,7 +192,13 @@ export async function refreshSupabaseCache() {
     tagihan,
     pembayaran,
     notifikasi,
-    pengumuman
+    pengumuman,
+    raportKelas,
+    mataPelajaran,
+    kelasSantri,
+    kelasMapel,
+    nilaiSantri,
+    raport
   ] = await Promise.all([
     db.profiles().catch(() => []),
     db.santri().catch(() => []),
@@ -186,7 +216,13 @@ export async function refreshSupabaseCache() {
     db.tagihan().catch(() => []),
     db.pembayaran().catch(() => []),
     db.notifikasi().catch(() => []),
-    db.pengumuman().catch(() => [])
+    db.pengumuman().catch(() => []),
+    db.raportKelas().catch(() => []),
+    db.mataPelajaran().catch(() => []),
+    db.kelasSantri().catch(() => []),
+    db.kelasMapel().catch(() => []),
+    db.nilaiSantri().catch(() => []),
+    db.raport().catch(() => [])
   ]);
 
   cache.profiles = profiles;
@@ -206,6 +242,12 @@ export async function refreshSupabaseCache() {
   cache.pembayaran = pembayaran;
   cache.notifikasi = notifikasi;
   cache.pengumuman = pengumuman;
+  cache.kelas = raportKelas;
+  cache.mata_pelajaran = mataPelajaran;
+  cache.kelas_santri = kelasSantri;
+  cache.kelas_mapel = kelasMapel;
+  cache.nilai_santri = nilaiSantri;
+  cache.raport = raport;
 }
 
 const upsertMany = async (table: string, rows: any[]) => {
@@ -229,7 +271,7 @@ export const dbLocal = {
   getSantri: () => cache.santri,
   setSantri: (v: Santri[]) => { cache.santri = v; upsertMany('santri', v); },
   getJenisPelanggaran: () => cache.jenis_pelanggaran,
-  setJenisPelanggaran: (v: JenisPelanggaran[]) => { cache.jenis_pelanggaran = v; upsertMany('jenis_pelanggaran', v); },
+  setJenisPelanggaran: (v: JenisPelanggaran[]) => { cache.jenis_pelanggaran = v; replaceTable('jenis_pelanggaran', v); },
   getPelanggaran: () => cache.pelanggaran,
   setPelanggaran: (v: Pelanggaran[]) => { cache.pelanggaran = v; replaceTable('pelanggaran', v); },
   getSetoranHapalan: () => cache.setoran_hapalan,
@@ -258,6 +300,26 @@ export const dbLocal = {
   setNotifikasi: (v: Notifikasi[]) => { cache.notifikasi = v; upsertMany('notifikasi', v); },
   getPengumuman: () => cache.pengumuman,
   setPengumuman: (v: Pengumuman[]) => { cache.pengumuman = v; upsertMany('pengumuman', v); },
+  getRaportKelas: () => cache.kelas,
+  setRaportKelas: (v: KelasRaport[]) => { cache.kelas = v; replaceTable('kelas', v); },
+  getMataPelajaran: () => cache.mata_pelajaran,
+  setMataPelajaran: (v: MataPelajaran[]) => { cache.mata_pelajaran = v; replaceTable('mata_pelajaran', v); },
+  getKelasSantri: () => cache.kelas_santri,
+  setKelasSantri: (v: KelasSantri[]) => { cache.kelas_santri = v; replaceTable('kelas_santri', v); },
+  getKelasMapel: () => cache.kelas_mapel,
+  setKelasMapel: (v: KelasMapel[]) => { cache.kelas_mapel = v; replaceTable('kelas_mapel', v); },
+  getNilaiSantri: () => cache.nilai_santri,
+  setNilaiSantri: (v: NilaiSantri[]) => {
+    cache.nilai_santri = v.map(row => ({
+      ...row,
+      nilai_akhir: typeof row.nilai_akhir === 'number'
+        ? row.nilai_akhir
+        : Number((((row.nilai_harian || 0) * 0.6) + ((row.nilai_uas || 0) * 0.4)).toFixed(2))
+    }));
+    upsertMany('nilai_santri', v.map(({ nilai_akhir, ...row }) => row));
+  },
+  getRaport: () => cache.raport,
+  setRaport: (v: Raport[]) => { cache.raport = v; upsertMany('raport', v); },
   insertKategoriHapalan: async (input: Omit<KategoriHapalan, 'id'>): Promise<KategoriHapalan> => {
     const { data, error } = await supabase
       .from('kategori_hapalan')

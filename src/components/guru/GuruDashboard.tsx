@@ -9,6 +9,7 @@ import { useRealtime } from '../../hooks/useRealtime';
 import { dbLocal, supabase, refreshSupabaseCache } from '../../lib/supabase';
 import { Santri, Pelanggaran, SetoranHapalan, JenisPelanggaran, Profile, KategoriHapalan } from '../../types';
 import { ImageUploader } from '../shared/ImageUploader';
+import { RaportPanel } from '../raport/RaportPanel';
 
 const TEACHER_AVATARS = [
   { id: 'av-g1', name: 'Ust. Fauzi', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80' },
@@ -883,6 +884,10 @@ export function GuruDashboard({ activeTab: parentActiveTab, onTabChange }: GuruD
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'raport' && (
+        <RaportPanel mode="guru" />
       )}
 
       {/* Tab: Profil Guru */}
