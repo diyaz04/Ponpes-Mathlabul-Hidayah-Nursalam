@@ -34,11 +34,6 @@ export default function App() {
     }
   }, [user]);
 
-  const handlePresetLogin = async (role: 'user' | 'guru' | 'admin') => {
-    setLoginError(null);
-    setLoginError(`Login cepat ${role} dinonaktifkan. Masuk dengan akun Supabase resmi.`);
-  };
-
   const handleLandingManualLogin = async (e: React.FormEvent, email: string, pass: string) => {
     e.preventDefault();
     setLoginError(null);
@@ -76,7 +71,6 @@ export default function App() {
       {!user ? (
         <LandingPage 
           beritaList={beritaList}
-          handlePresetLogin={handlePresetLogin}
           handleManualLogin={handleLandingManualLogin}
           loginError={loginError}
         />

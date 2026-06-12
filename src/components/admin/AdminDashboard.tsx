@@ -20,11 +20,37 @@ import {
   ProfilPesantren, Berita, Pengumuman, Pelanggaran, SetoranHapalan, JenisPelanggaran, KategoriHapalan
 } from '../../types';
 import { ImageUploader } from '../shared/ImageUploader';
+import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
 
 export interface AdminDashboardProps {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
 }
+
+const loadImageAsDataUrl = (src: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (_err) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = `${src}${src.includes('?') ? '&' : '?'}v=${Date.now()}`;
+  });
+};
 
 export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: externalOnTabChange }: AdminDashboardProps) {
   const { user } = useAuth();
@@ -1701,52 +1727,76 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   };
 
   // 4. Download Professional PDF Recaps Report with customized and elegant styling
-  const handleDownloadPDFReport = () => {
+  const handleDownloadPDFReport = async () => {
+    setActionDoneMsg('Menyiapkan PDF laporan keuangan...');
+    const logoDataUrl = await loadImageAsDataUrl(MATHLABUL_HIDAYAH_LOGO_URL);
+
     // 1. Create PDF
     const doc = new jsPDF('p', 'mm', 'a4');
-    
-    // 2. Draw Simulated Professional Logo / Crest
-    doc.setFillColor(4, 120, 87); // Emerald Hex
-    doc.circle(22, 20, 10, 'F');
-    
-    doc.setDrawColor(245, 158, 11); // Gold Line
-    doc.setLineWidth(0.5);
-    doc.circle(22, 20, 10, 'D');
 
-    // Initials in Crest
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('MHN', 22, 23.5, { align: 'center' });
+    // 2. Modern kop laporan
+    doc.setFillColor(4, 120, 87);
+    doc.rect(0, 0, 210, 9, 'F');
+    doc.setFillColor(245, 158, 11);
+    doc.rect(0, 9, 210, 1.2, 'F');
 
-    // 3. Header Text
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(13, 15, 24, 24, 4, 4, 'F');
+    doc.setDrawColor(220, 252, 231);
+    doc.roundedRect(13, 15, 24, 24, 4, 4, 'D');
+
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', 16, 18, 18, 18);
+    } else {
+      doc.setFillColor(4, 120, 87);
+      doc.circle(25, 27, 8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text('MH', 25, 29.5, { align: 'center' });
+    }
+
     doc.setTextColor(15, 23, 42); 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
-    doc.text(profilPP?.nama || 'Pondok Pesantren Mathlabul Hidayah Nursalam', 38, 15);
-    
-    doc.setTextColor(100, 116, 139); 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.text(profilPP?.tagline || 'Membentuk Generasi Qurani, Cerdas, dan Berkarakter Robbani', 38, 20.2);
-    doc.text(`${profilPP?.alamat || 'Jl. KH. Nursalam No. 45'} | Telp: ${profilPP?.telepon || '0231-88776655'}`, 38, 24.5);
+    doc.setFontSize(14);
+    doc.text(profilPP?.nama || 'Pondok Pesantren Mathlabul Hidayah Nursalam', 42, 20);
 
-    // Decorative separator line
-    doc.setDrawColor(203, 213, 225); 
-    doc.setLineWidth(0.8);
-    doc.line(12, 29, 198, 29);
+    doc.setTextColor(4, 120, 87);
+    doc.setFontSize(8);
+    doc.text('SISTEM INFORMASI KEUANGAN PESANTREN', 42, 25);
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(profilPP?.tagline || 'Membentuk Generasi Qurani, Cerdas, dan Berkarakter Robbani', 42, 30);
+    doc.text(`${profilPP?.alamat || 'Jl. KH. Nursalam No. 45'} | Telp: ${profilPP?.telepon || '0231-88776655'}`, 42, 34.5, { maxWidth: 105 });
+
+    doc.setFillColor(240, 253, 244);
+    doc.roundedRect(151, 16, 46, 19, 4, 4, 'F');
+    doc.setDrawColor(187, 247, 208);
+    doc.roundedRect(151, 16, 46, 19, 4, 4, 'D');
+    doc.setTextColor(22, 101, 52);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('LAPORAN BULANAN', 174, 23, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text('KEUANGAN', 174, 29, { align: 'center' });
+
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.5);
+    doc.line(12, 43, 198, 43);
 
     // Title of Report
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text('LAPORAN HASIL REKAPITULASI PENERIMAAN KAS KEUANGAN', 12, 38);
+    doc.setFontSize(12);
+    doc.text('LAPORAN HASIL REKAPITULASI PENERIMAAN KAS KEUANGAN', 12, 51);
 
     // Metadata Subtitle Info Box background
     doc.setFillColor(248, 250, 252); 
-    doc.rect(12, 42, 186, 18, 'F');
+    doc.roundedRect(12, 56, 186, 20, 3, 3, 'F');
     doc.setDrawColor(241, 245, 249);
-    doc.rect(12, 42, 186, 18, 'D');
+    doc.roundedRect(12, 56, 186, 20, 3, 3, 'D');
 
     doc.setTextColor(71, 85, 105); 
     doc.setFont('helvetica', 'bold');
@@ -1756,11 +1806,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     const formattedTanggal = `${new Date(filterStartDate).toLocaleDateString('id-ID')} s.d. ${new Date(filterEndDate).toLocaleDateString('id-ID')}`;
     const filterDesc = reportFilterType === 'bulan' ? formattedBulan : formattedTanggal;
 
-    doc.text(`Tipe Laporan: ${reportFilterType === 'bulan' ? 'Bulanan Terjadwal' : 'Custom Rentang Tanggal'}`, 16, 48);
-    doc.text(`Parameter Filter: ${filterDesc}`, 16, 54);
+    doc.text(`Tipe Laporan: ${reportFilterType === 'bulan' ? 'Bulanan Terjadwal' : 'Custom Rentang Tanggal'}`, 16, 64);
+    doc.text(`Parameter Filter: ${filterDesc}`, 16, 70);
 
-    doc.text(`Dicetak Oleh: ${user?.email || 'Administrator'}`, 120, 48);
-    doc.text(`Waktu Unduh: ${new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'})} WIB`, 120, 54);
+    doc.text(`Dicetak Oleh: ${user?.email || 'Administrator'}`, 116, 64);
+    doc.text(`Waktu Unduh: ${new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'})} WIB`, 116, 70);
 
     // Filter Payments
     const filtered = payments.filter(p => {
@@ -1805,7 +1855,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
     // Generate Table
     autoTable(doc, {
-      startY: 65,
+      startY: 82,
       head: [['No', 'ID Transaksi / Order ID', 'Nama Santri', 'Kelas', 'Peruntukan Iuran', 'Tanggal Settle', 'Metode', 'Nominal']],
       body: rows,
       theme: 'striped',

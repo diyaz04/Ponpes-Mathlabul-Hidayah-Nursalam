@@ -10,17 +10,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Footer } from '../layout/Footer';
 import { db } from '../../lib/supabase';
 import { ProfilPesantren } from '../../types';
+import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
 
 interface LandingPageProps {
   beritaList: any[];
-  handlePresetLogin: (role: 'user' | 'guru' | 'admin') => void;
   handleManualLogin: (e: React.FormEvent, email: string, pass: string) => void;
   loginError: string | null;
 }
 
 export function LandingPage({ 
   beritaList, 
-  handlePresetLogin, 
   handleManualLogin, 
   loginError 
 }: LandingPageProps) {
@@ -1212,9 +1211,18 @@ export function LandingPage({
           
           <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full blur-xl"></div>
 
-          <div className="text-center select-none space-y-1">
-            <h3 className="text-lg font-black text-slate-800 uppercase tracking-wide">Portal Akademik Terbuka</h3>
-            <p className="text-[11px] text-slate-400 font-medium">Buku pantauan wali, asrama santri, & setoran tahfidz</p>
+          <div className="text-center select-none space-y-3">
+            <div className="mx-auto w-24 h-24 rounded-3xl bg-white border border-green-100 shadow-lg shadow-green-900/10 p-3 flex items-center justify-center">
+              <img
+                src={MATHLABUL_HIDAYAH_LOGO_URL}
+                alt="Logo Mathlabul Hidayah"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-slate-800 uppercase tracking-wide">Portal Mathlabul Hidayah</h3>
+              <p className="text-[11px] text-slate-400 font-medium">Buku pantauan wali, asrama santri, & setoran tahfidz</p>
+            </div>
           </div>
 
           {loginError && (
@@ -1222,16 +1230,6 @@ export function LandingPage({
               ⚠️ {loginError}
             </div>
           )}
-
-          {/* Quick instructions indicator for first-time builders */}
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 select-none text-[11px] text-slate-500 text-left space-y-2">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Akun Akses Cepat Terfasilitasi:</span>
-            <div className="space-y-1 text-[10px]">
-              <p>🟢 <strong>Wali:</strong> <code>wali.kurniawan@gmail.com</code> / Sandi bebas</p>
-              <p>🔵 <strong>Guru:</strong> <code>fauzi@mathlabulhidayah.sch.id</code> / Sandi bebas</p>
-              <p>⚫ <strong>Admin:</strong> <code>admin@mathlabulhidayah.sch.id</code> / Sandi bebas</p>
-            </div>
-          </div>
 
           <form 
             onSubmit={(e) => handleManualLogin(e, email, pass)} 
@@ -1243,7 +1241,7 @@ export function LandingPage({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="wali.kurniawan@gmail.com"
+                placeholder="nama@mathlabulhidayah.sch.id"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-semibold focus:bg-white outline-none"
                 required
               />
