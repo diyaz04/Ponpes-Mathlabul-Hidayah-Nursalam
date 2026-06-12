@@ -247,6 +247,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [filterStartDate, setFilterStartDate] = useState('2026-05-01');
   const [filterEndDate, setFilterEndDate] = useState('2026-06-30');
   const [hapCatatan, setHapCatatan] = useState('');
+  const [pelanggaranView, setPelanggaranView] = useState<'log' | 'analitik'>('log');
+  const [pelanggaranLogTab, setPelanggaranLogTab] = useState<'riwayat' | 'kamus' | 'sanksi'>('riwayat');
+  const [pelanggaranKelasFilter, setPelanggaranKelasFilter] = useState('semua');
+  const [pelanggaranLevelFilter, setPelanggaranLevelFilter] = useState<'semua' | 'ringan' | 'sedang' | 'berat'>('semua');
 
   // Forms: Account Create/Edit
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -1832,7 +1836,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text(profilPP?.tagline || 'Membentuk Generasi Qurani, Cerdas, dan Berkarakter Robbani', 42, pesantrenNameLines.length > 1 ? 33 : 30, { maxWidth: 104 });
-    doc.text(`${profilPP?.alamat || 'Jl. KH. Nursalam No. 45'} | Telp: ${profilPP?.telepon || '0231-88776655'}`, 42, pesantrenNameLines.length > 1 ? 38 : 34.5, { maxWidth: 104 });
+    doc.text('Cigalontang-Kabupaten Tasikmalaya-Jawa Barat', 42, pesantrenNameLines.length > 1 ? 38 : 34.5, { maxWidth: 104 });
 
     doc.setFillColor(240, 253, 244);
     doc.roundedRect(151, 16, 46, 19, 4, 4, 'F');
@@ -2788,92 +2792,396 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
       {/* Tab: Pelanggaran (Data Pelanggaran) */}
       {activeTab === 'pelanggaran' && (
-        <div className="bg-white rounded-3xl p-6 border border-gray-150 space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 select-none">
-            <div>
-              <h4 className="font-extrabold text-gray-900 text-xs uppercase tracking-widest">Data Pelanggaran Murid</h4>
-              <p className="text-[11px] text-gray-400">Arsip pencatatan dan logs pembinaan kedisiplinan santri</p>
-            </div>
-            
-            <button 
-              onClick={handleOpenPelanggaranModal}
-              className="px-4 py-2.5 bg-red-650 hover:bg-red-700 bg-red-600 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1 shadow-sm transition-all active:scale-95"
+        <div className="space-y-6">
+          <div className="inline-flex bg-slate-100 p-1.5 rounded-2xl border border-slate-150 select-none">
+            <button
+              type="button"
+              onClick={() => setPelanggaranView('log')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                pelanggaranView === 'log'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
             >
-              <Plus className="w-4 h-4" /> Input Pelanggaran Baru
+              <FileText className="w-4 h-4" /> Log Pelanggaran
+            </button>
+            <button
+              type="button"
+              onClick={() => setPelanggaranView('analitik')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                pelanggaranView === 'analitik'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Activity className="w-4 h-4" /> Analitik & Radar
             </button>
           </div>
 
-          <div className="flex max-w-sm">
-            <input 
-              type="text"
-              placeholder="Cari santri atau deskripsi..."
-              value={searchPelanggaran}
-              onChange={(e) => setSearchPelanggaran(e.target.value)}
-              className="w-full bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-green-500"
-            />
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
-                <tr className="border-b border-gray-150">
-                  <th className="px-4 py-3">Tanggal</th>
-                  <th className="px-4 py-3">Nama Santri</th>
-                  <th className="px-4 py-3">Jenis Pelanggaran</th>
-                  <th className="px-4 py-3">Bobot Poin</th>
-                  <th className="px-4 py-3">Catatan / Guru</th>
-                  <th className="px-4 py-3 text-right">Tindakan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
-                {violationsList.filter(v => getSantriNama(v.santri_id).toLowerCase().includes(searchPelanggaran.toLowerCase()) || v.deskripsi.toLowerCase().includes(searchPelanggaran.toLowerCase())).slice().reverse().map((v) => (
-                  <tr key={v.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-gray-500">{v.tanggal}</td>
-                    <td className="px-4 py-3 font-extrabold text-slate-800">
-                      {getSantriNama(v.santri_id)}
-                      <span className="text-[10px] block font-normal text-gray-400">{getSantriKelas(v.santri_id)}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-zinc-800 font-bold">{getJenisVName(v.jenis_id)}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-black ${
-                        v.poin >= 50 ? 'bg-red-50 text-red-700 border border-red-200' :
-                        v.poin >= 20 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                        'bg-blue-50 text-blue-700 border border-blue-200'
-                      }`}>
-                        {v.poin} Poin
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-gray-600 block">{v.deskripsi}</span>
-                      <span className="text-[10px] font-normal text-gray-400 block mt-0.5">Oleh: {getGuruNama(v.guru_id)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-1.5 whitespace-nowrap">
-                      {v.status === 'aktif' ? (
-                        <button 
-                          onClick={() => handleResolveViolation(v.id)}
-                          className="px-2 py-1 text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-lg cursor-pointer transition-all"
-                        >
-                          Proses Takzir
-                        </button>
-                      ) : (
-                        <span className="text-[10px] text-green-700 font-extrabold bg-green-50 px-2.5 py-1 rounded-full uppercase leading-none">
-                          Ditindaklanjuti
-                        </span>
-                      )}
-                      <button 
-                        onClick={() => handleDeleteViolation(v.id)}
-                        className="p-1 px-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg cursor-pointer inline-flex items-center"
-                      >
-                        <Trash className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
+          {pelanggaranView === 'log' && (
+            <div className="space-y-5">
+              <div className="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-1 md:grid-cols-3 gap-1.5 select-none">
+                {[
+                  { id: 'riwayat', label: 'Riwayat Pelanggaran' },
+                  { id: 'kamus', label: 'Kamus Pelanggaran' },
+                  { id: 'sanksi', label: 'Aturan Sanksi' }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setPelanggaranLogTab(tab.id as any)}
+                    className={`py-3 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      pelanggaranLogTab === tab.id
+                        ? 'bg-rose-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {pelanggaranLogTab === 'riwayat' && (() => {
+                const kelasOptions = Array.from(new Set(santriList.map(s => s.kelas).filter(Boolean))).sort();
+                const search = searchPelanggaran.toLowerCase().trim();
+                const studentRows = santriList.map((santri) => {
+                  const records = violationsList.filter(v => v.santri_id === santri.id);
+                  const totalPoin = records.filter(v => v.status === 'aktif').reduce((sum, item) => sum + item.poin, 0);
+                  const latest = records.slice().sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
+                  const statusLabel = totalPoin >= 50 ? 'Kritis' : totalPoin >= 25 ? 'Pembinaan' : 'Aman';
+                  return { santri, records, totalPoin, latest, statusLabel };
+                }).filter(item => {
+                  if (item.records.length === 0) return false;
+                  if (search) {
+                    const match = item.santri.nama.toLowerCase().includes(search) ||
+                      item.santri.kelas.toLowerCase().includes(search) ||
+                      item.records.some(v => v.deskripsi.toLowerCase().includes(search) || getJenisVName(v.jenis_id).toLowerCase().includes(search));
+                    if (!match) return false;
+                  }
+                  if (pelanggaranKelasFilter !== 'semua' && item.santri.kelas !== pelanggaranKelasFilter) return false;
+                  if (pelanggaranLevelFilter !== 'semua') {
+                    const hasLevel = item.records.some(v => (vJenisList.find(j => j.id === v.jenis_id)?.kategori || 'ringan') === pelanggaranLevelFilter);
+                    if (!hasLevel) return false;
+                  }
+                  return true;
+                }).sort((a, b) => b.totalPoin - a.totalPoin || b.records.length - a.records.length);
+
+                return (
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Cari nama siswa / kelas / pelanggaran..."
+                            value={searchPelanggaran}
+                            onChange={(e) => setSearchPelanggaran(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-rose-500"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenPelanggaranModal}
+                          className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-sm transition-all flex items-center justify-center gap-2 active:scale-95"
+                        >
+                          <Plus className="w-4 h-4" /> Lapor
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <select
+                          value={pelanggaranKelasFilter}
+                          onChange={(e) => setPelanggaranKelasFilter(e.target.value)}
+                          className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700"
+                        >
+                          <option value="semua">Semua Kelas</option>
+                          {kelasOptions.map(kelas => <option key={kelas} value={kelas}>{kelas}</option>)}
+                        </select>
+                        <select
+                          value={pelanggaranLevelFilter}
+                          onChange={(e) => setPelanggaranLevelFilter(e.target.value as any)}
+                          className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700"
+                        >
+                          <option value="semua">Semua Tingkatan</option>
+                          <option value="ringan">Ringan</option>
+                          <option value="sedang">Sedang</option>
+                          <option value="berat">Berat</option>
+                        </select>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-500 flex items-center justify-between">
+                          <span>{studentRows.length} siswa tercatat</span>
+                          <span>10 / halaman</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {studentRows.length === 0 ? (
+                        <div className="bg-white border border-slate-200 rounded-2xl py-10 text-center text-xs font-bold text-slate-400">
+                          Belum ada riwayat pelanggaran yang cocok dengan filter.
+                        </div>
+                      ) : (
+                        studentRows.slice(0, 10).map((item) => (
+                          <div key={item.santri.id} className="bg-white border border-slate-200 rounded-2xl p-4 hover:border-rose-200 hover:shadow-sm transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                                <User className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h5 className="text-sm font-black text-slate-800 truncate">{item.santri.nama}</h5>
+                                <p className="text-[11px] text-slate-400 font-bold mt-0.5">{item.santri.kelas} • {item.records.length} kasus</p>
+                                {item.latest && (
+                                  <p className="text-[10px] text-slate-400 mt-1 truncate">Terbaru: {getJenisVName(item.latest.jenis_id)} - {item.latest.tanggal}</p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[9px] text-slate-400 font-black uppercase block">Sanksi Aktif</span>
+                                <span className={`text-sm font-black block ${
+                                  item.statusLabel === 'Kritis' ? 'text-red-600' :
+                                  item.statusLabel === 'Pembinaan' ? 'text-amber-600' :
+                                  'text-emerald-600'
+                                }`}>
+                                  {item.statusLabel}
+                                </span>
+                                <span className="text-[11px] text-slate-400 font-black">{item.totalPoin} Poin</span>
+                              </div>
+                            </div>
+                            <div className="mt-3 pl-16 space-y-2">
+                              {item.records.slice().reverse().slice(0, 3).map((v) => (
+                                <div key={v.id} className="flex items-center justify-between gap-3 bg-slate-50 rounded-xl px-3 py-2 text-[11px]">
+                                  <div className="min-w-0">
+                                    <span className="font-black text-slate-700 truncate block">{getJenisVName(v.jenis_id)}</span>
+                                    <span className="text-slate-400 truncate block">{v.deskripsi}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 whitespace-nowrap">
+                                    <span className="font-mono text-slate-400">{v.tanggal}</span>
+                                    <span className="font-black text-rose-600">{v.poin}p</span>
+                                    {v.status === 'aktif' ? (
+                                      <button onClick={() => handleResolveViolation(v.id)} className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg font-black cursor-pointer">Proses</button>
+                                    ) : (
+                                      <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg font-black">Selesai</span>
+                                    )}
+                                    <button onClick={() => handleDeleteViolation(v.id)} className="p-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg cursor-pointer">
+                                      <Trash className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {pelanggaranLogTab === 'kamus' && (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                    <h4 className="font-black text-slate-800 text-xs uppercase tracking-widest">Kamus Pelanggaran</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Daftar jenis pelanggaran, kategori, dan bobot poin default.</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-5">
+                    {vJenisList.map((jenis) => (
+                      <div key={jenis.id} className="rounded-2xl border border-slate-150 bg-white p-4 hover:shadow-sm transition-all">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h5 className="font-black text-sm text-slate-800">{jenis.nama}</h5>
+                            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{jenis.deskripsi || 'Belum ada deskripsi aturan rinci.'}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-lg text-[9px] uppercase font-black border ${
+                            jenis.kategori === 'berat' ? 'bg-red-50 text-red-700 border-red-100' :
+                            jenis.kategori === 'sedang' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                            'bg-blue-50 text-blue-700 border-blue-100'
+                          }`}>
+                            {jenis.kategori}
+                          </span>
+                        </div>
+                        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
+                          <span className="text-slate-400 font-bold">Poin default</span>
+                          <span className="font-black text-rose-600">{jenis.poin_default} poin</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pelanggaranLogTab === 'sanksi' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {[
+                    { title: 'Aman', range: '0 - 24 poin', tone: 'emerald', desc: 'Pemantauan rutin wali kelas dan guru pembina.' },
+                    { title: 'Pembinaan', range: '25 - 49 poin', tone: 'amber', desc: 'Pemanggilan santri, nasihat tertulis, dan monitoring perilaku.' },
+                    { title: 'Kritis / Takzir', range: '50+ poin', tone: 'red', desc: 'Tindak lanjut takzir, pemanggilan wali, atau rapat kedisiplinan.' }
+                  ].map((rule) => (
+                    <div key={rule.title} className={`rounded-2xl p-5 border ${
+                      rule.tone === 'red' ? 'bg-red-50 border-red-100' :
+                      rule.tone === 'amber' ? 'bg-amber-50 border-amber-100' :
+                      'bg-emerald-50 border-emerald-100'
+                    }`}>
+                      <Shield className={`w-5 h-5 mb-4 ${
+                        rule.tone === 'red' ? 'text-red-600' :
+                        rule.tone === 'amber' ? 'text-amber-600' :
+                        'text-emerald-600'
+                      }`} />
+                      <h5 className="font-black text-slate-800 text-sm">{rule.title}</h5>
+                      <p className="text-xs font-black text-slate-500 mt-1">{rule.range}</p>
+                      <p className="text-[11px] text-slate-500 leading-relaxed mt-3">{rule.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {pelanggaranView === 'analitik' && (() => {
+            const totalKasus = violationsList.length;
+            const totalPoin = violationsList.reduce((sum, item) => sum + item.poin, 0);
+            const siswaBersanksi = new Set(violationsList.filter(v => v.status === 'aktif').map(v => v.santri_id)).size;
+            const topStudent = santriList.map(s => ({
+              santri: s,
+              poin: violationsList.filter(v => v.santri_id === s.id && v.status === 'aktif').reduce((sum, v) => sum + v.poin, 0)
+            })).sort((a, b) => b.poin - a.poin)[0];
+
+            const monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+            const trendMap = monthShort.map((name, idx) => ({
+              name,
+              Kasus: violationsList.filter(v => {
+                const d = new Date(v.tanggal);
+                return !isNaN(d.getTime()) && d.getMonth() === idx;
+              }).length
+            })).filter(item => item.Kasus > 0);
+
+            const dist = ['ringan', 'sedang', 'berat'].map((kategori) => {
+              const data = violationsList.filter(v => (vJenisList.find(j => j.id === v.jenis_id)?.kategori || 'ringan') === kategori);
+              return {
+                kategori,
+                count: data.length,
+                poin: data.reduce((sum, item) => sum + item.poin, 0)
+              };
+            });
+            const maxDist = Math.max(...dist.map(d => d.poin), 1);
+
+            const typeStats = vJenisList.map(jenis => {
+              const data = violationsList.filter(v => v.jenis_id === jenis.id);
+              return { jenis, count: data.length, poin: data.reduce((sum, item) => sum + item.poin, 0) };
+            }).filter(item => item.count > 0).sort((a, b) => b.count - a.count);
+
+            const classStats = Array.from(new Set(santriList.map(s => s.kelas))).map(kelas => {
+              const ids = santriList.filter(s => s.kelas === kelas).map(s => s.id);
+              const data = violationsList.filter(v => ids.includes(v.santri_id));
+              return { kelas, count: data.length, poin: data.reduce((sum, item) => sum + item.poin, 0) };
+            }).filter(item => item.count > 0).sort((a, b) => b.poin - a.poin);
+            const maxClassPoint = Math.max(...classStats.map(c => c.poin), 1);
+
+            return (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Kasus</span>
+                      <Activity className="w-5 h-5 text-slate-600" />
+                    </div>
+                    <p className="text-3xl font-black text-slate-700 mt-4">{totalKasus}</p>
+                  </div>
+                  <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Poin</span>
+                      <AlertTriangle className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <p className="text-3xl font-black text-rose-600 mt-4">{totalPoin}</p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Siswa Bersanksi</span>
+                      <User className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <p className="text-3xl font-black text-amber-700 mt-4">{siswaBersanksi}</p>
+                  </div>
+                  <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sanksi Tertinggi</span>
+                      <ShieldAlert className="w-5 h-5 text-red-600" />
+                    </div>
+                    <p className="text-2xl font-black text-red-600 mt-5">{topStudent?.poin ? `${topStudent.poin}p` : '-'}</p>
+                    {topStudent?.poin ? <p className="text-[10px] text-slate-500 font-bold mt-1 truncate">{topStudent.santri.nama}</p> : null}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                  <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-5">
+                    <h4 className="font-black text-slate-800 text-sm flex items-center gap-2"><Activity className="w-4 h-4 text-indigo-600" /> Tren Pelanggaran Per Bulan</h4>
+                    <div className="h-56 mt-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={trendMap.length ? trendMap : [{ name: '-', Kasus: 0 }]} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} fontWeight={700} tickLine={false} axisLine={false} />
+                          <YAxis stroke="#94a3b8" fontSize={9} fontWeight={600} tickLine={false} axisLine={false} allowDecimals={false} />
+                          <Tooltip formatter={(value) => [`${value} kasus`, 'Kasus']} />
+                          <Bar dataKey="Kasus" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                    <h4 className="font-black text-slate-800 text-sm flex items-center gap-2"><Activity className="w-4 h-4 text-orange-600" /> Distribusi Kategori</h4>
+                    <div className="space-y-4 mt-6">
+                      {dist.map((item) => (
+                        <div key={item.kategori}>
+                          <div className="flex justify-between text-xs font-black text-slate-600 capitalize">
+                            <span>{item.kategori}</span>
+                            <span className="text-slate-400">{item.count}x • {item.poin} poin</span>
+                          </div>
+                          <div className="h-2 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${item.kategori === 'berat' ? 'bg-red-500' : item.kategori === 'sedang' ? 'bg-orange-500' : 'bg-yellow-400'}`}
+                              style={{ width: `${Math.max((item.poin / maxDist) * 100, item.poin > 0 ? 8 : 0)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                    <h4 className="font-black text-slate-800 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" /> Jenis Pelanggaran Terbanyak</h4>
+                    <div className="mt-5 space-y-3">
+                      {typeStats.slice(0, 6).map((item, idx) => (
+                        <div key={item.jenis.id} className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-6 text-center text-xs font-black text-slate-400">{idx + 1}</span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-slate-700 truncate">{item.jenis.nama}</p>
+                              <p className="text-[10px] text-slate-400 capitalize">{item.jenis.kategori} • {item.jenis.poin_default} poin/kasus</p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-black text-rose-600">{item.count}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                    <h4 className="font-black text-slate-800 text-sm flex items-center gap-2"><Users className="w-4 h-4 text-blue-600" /> Pelanggaran per Kelas</h4>
+                    <div className="mt-5 space-y-3">
+                      {classStats.slice(0, 8).map((item) => (
+                        <div key={item.kelas} className="grid grid-cols-[58px_1fr_70px] items-center gap-3">
+                          <span className="text-xs font-black text-slate-600">{item.kelas}</span>
+                          <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.max((item.poin / maxClassPoint) * 100, 8)}%` }} />
+                          </div>
+                          <span className="text-[11px] text-slate-500 font-bold text-right">{item.count}k • {item.poin}p</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
