@@ -7,9 +7,10 @@ import {
   TrendingUp, ArrowUpRight, ArrowDownRight, Menu, X, Share2, Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { jsPDF } from 'jspdf';
 import { Footer } from '../layout/Footer';
-import { db } from '../../lib/supabase';
-import { ProfilPesantren } from '../../types';
+import { db, dbLocal } from '../../lib/supabase';
+import { ProfilPesantren, PSB, PSBPendaftar } from '../../types';
 import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
 
 interface LandingPageProps {
@@ -25,11 +26,15 @@ export function LandingPage({
 }: LandingPageProps) {
   
   const [profilPP, setProfilPP] = useState<ProfilPesantren | null>(null);
+  const [psbConfig, setPsbConfig] = useState<PSB | null>(null);
 
   useEffect(() => {
     db.profilPesantren()
       .then(setProfilPP)
       .catch((error) => console.error('[Supabase Profil Pesantren Load Failure]', error));
+    db.psb()
+      .then(setPsbConfig)
+      .catch((error) => console.error('[Supabase PSB Load Failure]', error));
   }, []);
 
   // news index for dynamic hero news swap
@@ -110,10 +115,23 @@ export function LandingPage({
   // PSB State
   const [psbNama, setPsbNama] = useState('');
   const [psbNisn, setPsbNisn] = useState('');
-  const [psbKelas, setPsbKelas] = useState('VII');
+  const [psbJk, setPsbJk] = useState<'L' | 'P'>('L');
+  const [psbTempatLahir, setPsbTempatLahir] = useState('');
+  const [psbTanggalLahir, setPsbTanggalLahir] = useState('');
+  const [psbKelas, setPsbKelas] = useState('MTs Kelas VII');
+  const [psbProgram, setPsbProgram] = useState('Reguler');
+  const [psbAsalSekolah, setPsbAsalSekolah] = useState('');
+  const [psbAlamat, setPsbAlamat] = useState('');
+  const [psbAyah, setPsbAyah] = useState('');
+  const [psbIbu, setPsbIbu] = useState('');
   const [psbWali, setPsbWali] = useState('');
+  const [psbPekerjaanWali, setPsbPekerjaanWali] = useState('');
   const [psbPhone, setPsbPhone] = useState('');
+  const [psbEmail, setPsbEmail] = useState('');
+  const [psbCatatan, setPsbCatatan] = useState('');
   const [psbSuccess, setPsbSuccess] = useState(false);
+  const [psbSubmitting, setPsbSubmitting] = useState(false);
+  const [submittedPsb, setSubmittedPsb] = useState<PSBPendaftar | null>(null);
 
   // Interactive Huffazh Simulator (Previewing Dashboard power!)
   const [simSurah, setSimSurah] = useState('An-Naba\'');
@@ -141,17 +159,141 @@ export function LandingPage({
     setSimAyat('');
   };
 
-  const handlePsbSubmit = (e: React.FormEvent) => {
+  const isPsbOpen = psbConfig?.is_open ?? true;
+
+  const resetPsbForm = () => {
+    setPsbNama('');
+    setPsbNisn('');
+    setPsbJk('L');
+    setPsbTempatLahir('');
+    setPsbTanggalLahir('');
+    setPsbKelas('MTs Kelas VII');
+    setPsbProgram('Reguler');
+    setPsbAsalSekolah('');
+    setPsbAlamat('');
+    setPsbAyah('');
+    setPsbIbu('');
+    setPsbWali('');
+    setPsbPekerjaanWali('');
+    setPsbPhone('');
+    setPsbEmail('');
+    setPsbCatatan('');
+  };
+
+  const generatePsbProofPdf = async (data: PSBPendaftar) => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    doc.setFillColor(5, 95, 70);
+    doc.rect(0, 0, 210, 26, 'F');
+    doc.setFillColor(245, 158, 11);
+    doc.rect(0, 26, 210, 2, 'F');
+
+    try {
+      const logo = await new Promise<string | null>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d')?.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(null);
+        img.src = `${MATHLABUL_HIDAYAH_LOGO_URL}?v=${Date.now()}`;
+      });
+      if (logo) doc.addImage(logo, 'PNG', 16, 34, 22, 22);
+    } catch (_err) {
+      // Logo is optional when browser blocks remote canvas.
+    }
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('BUKTI PENDAFTARAN SANTRI BARU', 45, 39);
+    doc.setFontSize(12);
+    doc.text('Pondok Pesantren Mathlabul Hidayah Nursalam', 45, 46);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Cigalontang - Kabupaten Tasikmalaya - Jawa Barat', 45, 52);
+    doc.setDrawColor(203, 213, 225);
+    doc.line(16, 62, 194, 62);
+
+    doc.setFillColor(236, 253, 245);
+    doc.roundedRect(16, 70, 178, 22, 3, 3, 'F');
+    doc.setTextColor(6, 95, 70);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(`Nomor Pendaftaran: ${data.nomor_pendaftaran}`, 24, 80);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Status Awal: ${data.status.toUpperCase()}`, 24, 87);
+
+    const rows = [
+      ['Nama Lengkap', data.nama_lengkap],
+      ['NISN', data.nisn || '-'],
+      ['Jenis Kelamin', data.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'],
+      ['Tempat/Tanggal Lahir', `${data.tempat_lahir || '-'} / ${data.tanggal_lahir || '-'}`],
+      ['Jenjang', data.jenjang],
+      ['Program Pilihan', data.program_pilihan || '-'],
+      ['Asal Sekolah', data.asal_sekolah || '-'],
+      ['Nama Wali', data.nama_wali],
+      ['WhatsApp Wali', data.no_whatsapp],
+      ['Tanggal Daftar', data.created_at ? new Date(data.created_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')]
+    ];
+
+    let y = 104;
+    doc.setTextColor(15, 23, 42);
+    rows.forEach(([label, value]) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 22, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(value), 78, y);
+      y += 8;
+    });
+
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(16, y + 6, 178, 25, 3, 3, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('Instruksi Berikutnya', 22, y + 15);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Simpan bukti ini. Panitia PSB akan memverifikasi data dan menghubungi nomor WhatsApp wali.', 22, y + 22, { maxWidth: 164 });
+
+    doc.save(`Bukti_PSB_${data.nomor_pendaftaran}.pdf`);
+  };
+
+  const handlePsbSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!psbNama || !psbNisn || !psbWali || !psbPhone) return;
-    setPsbSuccess(true);
-    setTimeout(() => {
-      setPsbSuccess(false);
-      setPsbNama('');
-      setPsbNisn('');
-      setPsbWali('');
-      setPsbPhone('');
-    }, 4000);
+    if (!isPsbOpen || !psbNama || !psbWali || !psbPhone) return;
+    setPsbSubmitting(true);
+    try {
+      const nomor = `PSB-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      const saved = await dbLocal.insertPSBPendaftar({
+        nomor_pendaftaran: nomor,
+        nama_lengkap: psbNama,
+        nisn: psbNisn,
+        jenis_kelamin: psbJk,
+        tempat_lahir: psbTempatLahir,
+        tanggal_lahir: psbTanggalLahir || undefined,
+        jenjang: psbKelas,
+        program_pilihan: psbProgram,
+        asal_sekolah: psbAsalSekolah,
+        alamat: psbAlamat,
+        nama_ayah: psbAyah,
+        nama_ibu: psbIbu,
+        nama_wali: psbWali,
+        pekerjaan_wali: psbPekerjaanWali,
+        no_whatsapp: psbPhone,
+        email: psbEmail,
+        catatan: psbCatatan,
+        status: 'baru'
+      });
+      setSubmittedPsb(saved);
+      setPsbSuccess(true);
+      resetPsbForm();
+    } catch (err: any) {
+      alert(`Pendaftaran gagal disimpan: ${err.message || err}`);
+    } finally {
+      setPsbSubmitting(false);
+    }
   };
 
   // Static Data lists
@@ -511,12 +653,14 @@ export function LandingPage({
           >
             Tanya Jawab
           </button>
-          <button 
-            onClick={() => setActiveTab('psb')} 
-            className={`transition-all uppercase tracking-wider px-3 py-1.5 rounded-full border cursor-pointer ${activeTab === 'psb' ? 'bg-emerald-600 text-white border-emerald-600 font-black' : 'text-emerald-800 bg-emerald-50 border-emerald-250/20 hover:bg-emerald-100/80'}`}
-          >
-            PSB Online
-          </button>
+          {isPsbOpen && (
+            <button
+              onClick={() => setActiveTab('psb')}
+              className={`transition-all uppercase tracking-wider px-3 py-1.5 rounded-full border cursor-pointer ${activeTab === 'psb' ? 'bg-emerald-600 text-white border-emerald-600 font-black' : 'text-emerald-800 bg-emerald-50 border-emerald-250/20 hover:bg-emerald-100/80'}`}
+            >
+              PSB Online
+            </button>
+          )}
         </div>
 
         <button 
@@ -589,7 +733,7 @@ export function LandingPage({
                     { id: 'program', label: 'Program' },
                     { id: 'berita', label: 'Berita & Kajian' },
                     { id: 'faq', label: 'Tanya Jawab' },
-                    { id: 'psb', label: 'PSB Online' },
+                    ...(isPsbOpen ? [{ id: 'psb', label: 'PSB Online' }] : []),
                   ].map((menu) => {
                     const isActive = activeTab === menu.id;
                     return (
@@ -722,12 +866,14 @@ export function LandingPage({
                       </p>
 
                       <div className="flex flex-wrap justify-center gap-3.5 pt-2">
-                        <button 
-                          onClick={() => setActiveTab('psb')}
-                          className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-lg border border-emerald-500/20 cursor-pointer transition-all active:scale-95 flex items-center gap-2"
-                        >
-                          Daftar Santri Baru (PSB) <ArrowRight className="w-4 h-4" />
-                        </button>
+                        {isPsbOpen && (
+                          <button
+                            onClick={() => setActiveTab('psb')}
+                            className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-lg border border-emerald-500/20 cursor-pointer transition-all active:scale-95 flex items-center gap-2"
+                          >
+                            Daftar Santri Baru (PSB) <ArrowRight className="w-4 h-4" />
+                          </button>
+                        )}
                         <button 
                           onClick={() => setActiveTab('masuk')}
                           className="px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-700 font-extrabold text-xs rounded-xl border border-slate-300 shadow-sm cursor-pointer transition-all active:scale-95 flex items-center gap-2"
@@ -1084,13 +1230,51 @@ export function LandingPage({
             <p className="text-xs text-slate-400">{sectionTitles.psb.desc}</p>
           </div>
 
-          {psbSuccess && (
+          {false && psbSuccess && (
             <div className="p-4 bg-emerald-50 text-emerald-800 font-extrabold text-xs rounded-xl border border-emerald-200 text-center animate-bounce shadow-xs">
               🎉 Masyallah! Formulir PSB Sukses Terkirim! Panitia akan segera menghubungi No WhatsApp Orangtua dalam 1x24 jam untuk verifikasi dokumen.
             </div>
           )}
 
-          <form onSubmit={handlePsbSubmit} className="space-y-4 text-xs text-left">
+          {!isPsbOpen ? (
+            <div className="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-200 text-center">
+              <h3 className="text-lg font-black text-slate-800 uppercase">Pendaftaran Belum Dibuka</h3>
+              <p className="text-xs text-slate-500 font-semibold mt-2">Panitia belum mengaktifkan formulir PSB online. Silakan pantau informasi resmi pesantren.</p>
+            </div>
+          ) : (
+            <form onSubmit={handlePsbSubmit} className="space-y-5 text-xs text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Lengkap Calon Santri:</label><input type="text" value={psbNama} onChange={(e) => setPsbNama(e.target.value)} placeholder="cth: Ahmad Fauzi Syafii" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">NISN:</label><input type="text" value={psbNisn} onChange={(e) => setPsbNisn(e.target.value)} placeholder="cth: 3012903822" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Jenis Kelamin:</label><select value={psbJk} onChange={(e) => setPsbJk(e.target.value as 'L' | 'P')} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white outline-none"><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Tempat Lahir:</label><input type="text" value={psbTempatLahir} onChange={(e) => setPsbTempatLahir(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Tanggal Lahir:</label><input type="date" value={psbTanggalLahir} onChange={(e) => setPsbTanggalLahir(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Jenjang Dituju:</label><select value={psbKelas} onChange={(e) => setPsbKelas(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white outline-none"><option>MTs Kelas VII</option><option>MTs Pindahan</option><option>MA Kelas X</option><option>MA Pindahan</option></select></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Program Pilihan:</label><select value={psbProgram} onChange={(e) => setPsbProgram(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white outline-none"><option>Reguler</option><option>Tahfidz</option><option>Kitab Kuning</option><option>Bilingual</option></select></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Asal Sekolah:</label><input type="text" value={psbAsalSekolah} onChange={(e) => setPsbAsalSekolah(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              </div>
+              <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Alamat Lengkap:</label><textarea rows={3} value={psbAlamat} onChange={(e) => setPsbAlamat(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Ayah:</label><input type="text" value={psbAyah} onChange={(e) => setPsbAyah(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Ibu:</label><input type="text" value={psbIbu} onChange={(e) => setPsbIbu(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Wali Utama:</label><input type="text" value={psbWali} onChange={(e) => setPsbWali(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required /></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Pekerjaan Wali:</label><input type="text" value={psbPekerjaanWali} onChange={(e) => setPsbPekerjaanWali(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">No WhatsApp Wali:</label><input type="text" value={psbPhone} onChange={(e) => setPsbPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Email:</label><input type="email" value={psbEmail} onChange={(e) => setPsbEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              </div>
+              <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Catatan Tambahan:</label><textarea rows={3} value={psbCatatan} onChange={(e) => setPsbCatatan(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              <p className="text-[10px] text-slate-400 leading-normal bg-slate-50 p-3 rounded-xl border border-slate-150">Dengan menekan tombol pendaftaran, data calon santri akan terekam dan menunggu verifikasi panitia PSB.</p>
+              <button type="submit" disabled={psbSubmitting} className="w-full py-3.5 bg-green-700 hover:bg-green-800 disabled:bg-slate-400 text-white font-extrabold rounded-xl shadow-lg cursor-pointer transition-all active:scale-95 text-xs select-none uppercase tracking-wider">{psbSubmitting ? 'Menyimpan Pendaftaran...' : 'Ajukan Berkas Pendaftaran Santri Baru'}</button>
+            </form>
+          )}
+
+          <form onSubmit={handlePsbSubmit} className="hidden">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Lengkap Calon Santri:</label>
@@ -1371,7 +1555,59 @@ export function LandingPage({
         </motion.div>
       </AnimatePresence>
 
-      <Footer profilPP={profilPP} onNavigate={setActiveTab} />
+      <Footer profilPP={profilPP} psbEnabled={isPsbOpen} onNavigate={setActiveTab} />
+
+      <AnimatePresence>
+        {psbSuccess && submittedPsb && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.65 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-950 z-50 backdrop-blur-[3px]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 18 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 18 }}
+              className="fixed inset-x-4 top-[14%] max-w-lg mx-auto bg-white rounded-3xl z-60 shadow-2xl border border-emerald-100 overflow-hidden text-center"
+            >
+              <div className="h-2 bg-gradient-to-r from-green-600 via-emerald-600 to-green-700" />
+              <div className="p-8 space-y-5">
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                  <CheckCircle2 className="w-9 h-9 text-emerald-700" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Pendaftaran Berhasil</p>
+                  <h3 className="text-xl font-black text-slate-900 uppercase mt-1">{submittedPsb.nomor_pendaftaran}</h3>
+                  <p className="text-xs text-slate-500 font-semibold mt-2 leading-relaxed">Data calon santri sudah masuk ke panitia PSB dan menunggu verifikasi admin.</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 border border-slate-150 p-4 text-left">
+                  <p className="text-[10px] font-black uppercase text-slate-400">Calon Santri</p>
+                  <p className="text-sm font-black text-slate-800 uppercase">{submittedPsb.nama_lengkap}</p>
+                  <p className="text-xs text-slate-500 font-semibold">{submittedPsb.jenjang} - {submittedPsb.no_whatsapp}</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => generatePsbProofPdf(submittedPsb)}
+                    className="py-3 bg-green-700 hover:bg-green-800 text-white rounded-xl text-xs font-black cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-4 h-4" /> Unduh Bukti PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPsbSuccess(false)}
+                    className="py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Selected News/Berita Dialog Modal */}
       <AnimatePresence>

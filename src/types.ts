@@ -229,6 +229,31 @@ export interface PSB {
   created_at?: string;
 }
 
+export interface PSBPendaftar {
+  id: string;
+  nomor_pendaftaran: string;
+  nama_lengkap: string;
+  nisn?: string;
+  jenis_kelamin: 'L' | 'P';
+  tempat_lahir?: string;
+  tanggal_lahir?: string;
+  jenjang: string;
+  program_pilihan?: string;
+  asal_sekolah?: string;
+  alamat?: string;
+  nama_ayah?: string;
+  nama_ibu?: string;
+  nama_wali: string;
+  pekerjaan_wali?: string;
+  no_whatsapp: string;
+  email?: string;
+  catatan?: string;
+  status: 'baru' | 'terverifikasi' | 'ditolak';
+  catatan_admin?: string;
+  verified_at?: string;
+  created_at?: string;
+}
+
 export interface JenisPembayaran {
   id: string;
   nama: string;

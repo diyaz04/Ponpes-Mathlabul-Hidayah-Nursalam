@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   BookOpen, LayoutDashboard, UserCheck, ShieldAlert, FileText, 
   Settings, CreditCard, History, User, Users, Megaphone, 
-  Newspaper, LogOut, GraduationCap, DollarSign, Scroll, Languages, X
+  Newspaper, LogOut, GraduationCap, DollarSign, Scroll, Languages, X, UserPlus
 } from 'lucide-react';
 import { UserRole } from '../../types';
 
@@ -27,6 +27,7 @@ export function Sidebar({ role, activeMenu, setActiveMenu, onLogout, isOpen = fa
           { id: 'pelanggaran', name: 'Data Pelanggaran', icon: ShieldAlert },
           { id: 'hapalan', name: 'Data Hapalan', icon: BookOpen },
           { id: 'raport', name: 'Kelola Raport', icon: FileText },
+          { id: 'psb_admin', name: 'Penerimaan Santri Baru', icon: UserPlus },
           { id: 'pembayaran_config', name: 'Atur & Monitoring Tagihan', icon: Settings },
           { id: 'rekap_pembayaran', name: 'Rekap Bayar', icon: DollarSign },
           { id: 'cms', name: 'Manajemen Konten', icon: Newspaper },

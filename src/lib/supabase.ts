@@ -18,6 +18,7 @@ import {
   Program,
   ProgressHapalan,
   PSB,
+  PSBPendaftar,
   Raport,
   Santri,
   SetoranHapalan,
@@ -98,6 +99,7 @@ export const db = {
     if (error) throw error;
     return data;
   },
+  psbPendaftar: () => fetchTable<PSBPendaftar>('psb_pendaftar'),
   jenisPembayaran: () => fetchTable<JenisPembayaran>('jenis_pembayaran'),
   nominalPembayaran: () => fetchTable('nominal_pembayaran'),
   tagihan: () => fetchTable<Tagihan>('tagihan'),
@@ -134,6 +136,7 @@ type SupabaseCache = {
   program: Program[];
   berita: Berita[];
   psb: PSB | null;
+  psb_pendaftar: PSBPendaftar[];
   jenis_pembayaran: any[];
   nominal_pembayaran: any[];
   tagihan: Tagihan[];
@@ -160,6 +163,7 @@ const cache: SupabaseCache = {
   program: [],
   berita: [],
   psb: null,
+  psb_pendaftar: [],
   jenis_pembayaran: [],
   nominal_pembayaran: [],
   tagihan: [],
@@ -187,6 +191,7 @@ export async function refreshSupabaseCache() {
     program,
     berita,
     psb,
+    psbPendaftar,
     jenisPembayaran,
     nominalPembayaran,
     tagihan,
@@ -211,6 +216,7 @@ export async function refreshSupabaseCache() {
     db.programs().catch(() => []),
     db.berita().catch(() => []),
     db.psb().catch(() => null),
+    db.psbPendaftar().catch(() => []),
     db.jenisPembayaran().catch(() => []),
     db.nominalPembayaran().catch(() => []),
     db.tagihan().catch(() => []),
@@ -236,6 +242,7 @@ export async function refreshSupabaseCache() {
   cache.program = program;
   cache.berita = berita;
   cache.psb = psb;
+  cache.psb_pendaftar = psbPendaftar;
   cache.jenis_pembayaran = jenisPembayaran;
   cache.nominal_pembayaran = nominalPembayaran;
   cache.tagihan = tagihan;
@@ -265,6 +272,17 @@ const replaceTable = async (table: string, rows: any[]) => {
   await upsertMany(table, rows);
 };
 
+const createLocalUuid = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    const value = char === 'x' ? random : (random & 0x3 | 0x8);
+    return value.toString(16);
+  });
+};
+
 export const dbLocal = {
   getProfiles: () => cache.profiles,
   setProfiles: (v: Profile[]) => { cache.profiles = v; upsertMany('profiles', v); },
@@ -288,6 +306,8 @@ export const dbLocal = {
   setBerita: (v: Berita[]) => { cache.berita = v; upsertMany('berita', v); },
   getPSB: () => cache.psb,
   setPSB: (v: PSB) => { cache.psb = v; supabase.from('psb').upsert(v).then(({ error }) => error && console.error(error)); },
+  getPSBPendaftar: () => cache.psb_pendaftar,
+  setPSBPendaftar: (v: PSBPendaftar[]) => { cache.psb_pendaftar = v; upsertMany('psb_pendaftar', v); },
   getJenisPembayaran: () => cache.jenis_pembayaran,
   setJenisPembayaran: (v: any[]) => { cache.jenis_pembayaran = v; upsertMany('jenis_pembayaran', v); },
   getNominalPembayaran: () => cache.nominal_pembayaran,
@@ -368,6 +388,30 @@ export const dbLocal = {
     if (error) throw error;
     await refreshSupabaseCache().catch(() => undefined);
     return (data || []) as Tagihan[];
+  },
+  insertPSBPendaftar: async (input: Omit<PSBPendaftar, 'id' | 'created_at'>): Promise<PSBPendaftar> => {
+    const row = {
+      id: createLocalUuid(),
+      created_at: new Date().toISOString(),
+      ...input
+    } as PSBPendaftar;
+    const { error } = await supabase
+      .from('psb_pendaftar')
+      .insert(row);
+    if (error) throw error;
+    await refreshSupabaseCache().catch(() => undefined);
+    return row;
+  },
+  updatePSBPendaftar: async (id: string, input: Partial<PSBPendaftar>): Promise<PSBPendaftar> => {
+    const { data, error } = await supabase
+      .from('psb_pendaftar')
+      .update(input)
+      .eq('id', id)
+      .select('*')
+      .single<PSBPendaftar>();
+    if (error) throw error;
+    await refreshSupabaseCache().catch(() => undefined);
+    return data;
   },
   confirmPayment: (pembayaranId: string, method?: string) => {
     supabase

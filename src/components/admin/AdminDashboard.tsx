@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 import { 
   Santri, Profile, Tagihan, Pembayaran, JenisPembayaran, 
-  ProfilPesantren, Berita, Pengumuman, Pelanggaran, SetoranHapalan, JenisPelanggaran, KategoriHapalan
+  ProfilPesantren, Berita, Pengumuman, Pelanggaran, SetoranHapalan, JenisPelanggaran, KategoriHapalan, PSB, PSBPendaftar
 } from '../../types';
 import { ImageUploader } from '../shared/ImageUploader';
 import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
@@ -91,6 +91,8 @@ const CMS_SECTION_KEYS = [
 const CMS_ICON_OPTIONS = ['BookOpen', 'Sparkles', 'ShieldCheck', 'GraduationCap', 'Activity'];
 const CMS_TONE_OPTIONS = ['green', 'indigo', 'amber', 'rose'];
 const CMS_SOCIAL_OPTIONS = ['instagram', 'facebook', 'youtube', 'tiktok', 'whatsapp', 'telegram', 'website'];
+const PSB_JENJANG_OPTIONS = ['MTs Kelas VII', 'MTs Pindahan', 'MA Kelas X', 'MA Pindahan'];
+const PSB_PROGRAM_OPTIONS = ['Reguler', 'Tahfidz', 'Kitab Kuning', 'Bilingual'];
 
 const parseCmsJson = <T,>(value: string, fallback: T): T => {
   try {
@@ -166,6 +168,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [beritaList, setBeritaList] = useState<Berita[]>([]);
   const [announcements, setAnnouncements] = useState<Pengumuman[]>([]);
   const [profilPP, setProfilPP] = useState<ProfilPesantren | null>(null);
+  const [psbConfig, setPsbConfig] = useState<PSB | null>(null);
+  const [psbPendaftarList, setPsbPendaftarList] = useState<PSBPendaftar[]>([]);
 
   // New Data Cache for Pelanggaran & Hafalan
   const [violationsList, setViolationsList] = useState<Pelanggaran[]>([]);
@@ -242,6 +246,21 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [faqJson, setFaqJson] = useState('');
   const [sectionTitlesJson, setSectionTitlesJson] = useState('');
   const [socialLinksJson, setSocialLinksJson] = useState('');
+
+  // PSB Admin Module
+  const [psbSubTab, setPsbSubTab] = useState<'dashboard' | 'konfigurasi' | 'pendaftar'>('dashboard');
+  const [psbSearch, setPsbSearch] = useState('');
+  const [psbStatusFilter, setPsbStatusFilter] = useState<'semua' | PSBPendaftar['status']>('semua');
+  const [psbDetail, setPsbDetail] = useState<PSBPendaftar | null>(null);
+  const [psbAdminNote, setPsbAdminNote] = useState('');
+  const [psbTahunAjaran, setPsbTahunAjaran] = useState('2026/2027');
+  const [psbTanggalBuka, setPsbTanggalBuka] = useState('2026-06-01');
+  const [psbTanggalTutup, setPsbTanggalTutup] = useState('2026-07-31');
+  const [psbKuota, setPsbKuota] = useState<number>(120);
+  const [psbBiaya, setPsbBiaya] = useState<number>(0);
+  const [psbSyarat, setPsbSyarat] = useState('Fotokopi KK, akta kelahiran, ijazah/SKL, pas foto, dan kartu NISN.');
+  const [psbAlur, setPsbAlur] = useState('Isi formulir online, unduh bukti pendaftaran, tunggu verifikasi admin, lalu ikuti arahan panitia PSB.');
+  const [psbIsOpen, setPsbIsOpen] = useState(false);
 
   // CMS Sub Tab & Berita Manager states
   const [cmsSubTab, setCmsSubTab] = useState<'profil_hero' | 'berita'>('profil_hero');
@@ -412,6 +431,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         setoranHapalan,
         kategoriHapalan,
         jenisPelanggaran,
+        psb,
+        psbPendaftar,
         pp
       ] = await Promise.all([
         db.santri(),
@@ -425,6 +446,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         db.setoranHapalan(),
         db.kategoriHapalan(),
         db.jenisPelanggaran(),
+        db.psb(),
+        db.psbPendaftar(),
         db.profilPesantren()
       ]);
 
@@ -439,6 +462,19 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setHapalanList(setoranHapalan);
       setHapKategoriList(kategoriHapalan);
       setVJenisList(jenisPelanggaran);
+      setPsbConfig(psb);
+      setPsbPendaftarList(psbPendaftar);
+
+    if (psb) {
+      setPsbTahunAjaran(psb.tahun_ajaran || '2026/2027');
+      setPsbTanggalBuka(psb.tanggal_buka || '2026-06-01');
+      setPsbTanggalTutup(psb.tanggal_tutup || '2026-07-31');
+      setPsbKuota(Number(psb.kuota || 0));
+      setPsbBiaya(Number(psb.biaya || 0));
+      setPsbSyarat(psb.syarat || '');
+      setPsbAlur(psb.alur_pendaftaran || '');
+      setPsbIsOpen(Boolean(psb.is_open));
+    }
 
     setProfilPP(pp);
     if (pp) {
@@ -487,7 +523,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
   useRealtime(
     refreshAdminData,
-    ['profiles', 'santri', 'jenis_pembayaran', 'tagihan', 'pembayaran', 'berita', 'pengumuman', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'jenis_pelanggaran', 'profil_pesantren']
+    ['profiles', 'santri', 'jenis_pembayaran', 'tagihan', 'pembayaran', 'berita', 'pengumuman', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'jenis_pelanggaran', 'profil_pesantren', 'psb', 'psb_pendaftar']
   );
 
   const getWaliName = (id?: string) => {
@@ -3040,6 +3076,114 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     });
   };
 
+  const filteredPsbPendaftar = psbPendaftarList
+    .filter((row) => psbStatusFilter === 'semua' || row.status === psbStatusFilter)
+    .filter((row) => {
+      const query = psbSearch.toLowerCase().trim();
+      if (!query) return true;
+      return [
+        row.nomor_pendaftaran,
+        row.nama_lengkap,
+        row.nisn,
+        row.jenjang,
+        row.nama_wali,
+        row.no_whatsapp
+      ].filter(Boolean).join(' ').toLowerCase().includes(query);
+    })
+    .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+
+  const psbStats = {
+    total: psbPendaftarList.length,
+    baru: psbPendaftarList.filter((row) => row.status === 'baru').length,
+    verified: psbPendaftarList.filter((row) => row.status === 'terverifikasi').length,
+    rejected: psbPendaftarList.filter((row) => row.status === 'ditolak').length
+  };
+
+  const handleSavePsbConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload: PSB = {
+      id: psbConfig?.id || createClientUuid(),
+      tahun_ajaran: psbTahunAjaran,
+      tanggal_buka: psbTanggalBuka,
+      tanggal_tutup: psbTanggalTutup,
+      kuota: Number(psbKuota) || 0,
+      syarat: psbSyarat,
+      alur_pendaftaran: psbAlur,
+      biaya: Number(psbBiaya) || 0,
+      is_open: psbIsOpen,
+      created_at: psbConfig?.created_at
+    };
+
+    try {
+      const { error } = await supabase.from('psb').upsert(payload);
+      if (error) throw error;
+      dbLocal.setPSB(payload);
+      setPsbConfig(payload);
+      setActionDoneMsg('✅ Konfigurasi PSB berhasil disimpan.');
+      await refreshAdminData();
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal menyimpan konfigurasi PSB: ${err.message || err}`);
+    }
+    setTimeout(() => setActionDoneMsg(null), 4000);
+  };
+
+  const handleUpdatePsbStatus = async (row: PSBPendaftar, status: PSBPendaftar['status']) => {
+    try {
+      const updated = await dbLocal.updatePSBPendaftar(row.id, {
+        status,
+        catatan_admin: psbAdminNote,
+        verified_at: status === 'terverifikasi' ? new Date().toISOString() : row.verified_at
+      });
+      setPsbPendaftarList((prev) => prev.map((item) => item.id === updated.id ? updated : item));
+      setPsbDetail(updated);
+      setActionDoneMsg(`✅ Status ${row.nama_lengkap} diperbarui menjadi ${status}.`);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal memperbarui status: ${err.message || err}`);
+    }
+    setTimeout(() => setActionDoneMsg(null), 4000);
+  };
+
+  const handleOpenPsbDetail = (row: PSBPendaftar) => {
+    setPsbDetail(row);
+    setPsbAdminNote(row.catatan_admin || '');
+  };
+
+  const exportPsbExcel = () => {
+    const rows = filteredPsbPendaftar.map((row, index) => ({
+      No: index + 1,
+      'Nomor Pendaftaran': row.nomor_pendaftaran,
+      'Nama Lengkap': row.nama_lengkap,
+      NISN: row.nisn || '',
+      'Jenis Kelamin': row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
+      'Tempat Lahir': row.tempat_lahir || '',
+      'Tanggal Lahir': row.tanggal_lahir || '',
+      Jenjang: row.jenjang,
+      Program: row.program_pilihan || '',
+      'Asal Sekolah': row.asal_sekolah || '',
+      Alamat: row.alamat || '',
+      Ayah: row.nama_ayah || '',
+      Ibu: row.nama_ibu || '',
+      Wali: row.nama_wali,
+      'Pekerjaan Wali': row.pekerjaan_wali || '',
+      WhatsApp: row.no_whatsapp,
+      Email: row.email || '',
+      Status: row.status,
+      'Catatan Admin': row.catatan_admin || '',
+      'Tanggal Daftar': row.created_at ? new Date(row.created_at).toLocaleString('id-ID') : ''
+    }));
+    const ws = utils.json_to_sheet(rows);
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, 'Pendaftar PSB');
+    const wbout = write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `data_pendaftar_psb_${psbTahunAjaran.replace('/', '-')}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={`p-4 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto flex-1 ${isPending ? 'opacity-50' : ''}`}>
       
@@ -4305,6 +4449,128 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
       {activeTab === 'raport' && (
         <RaportPanel mode="admin" />
+      )}
+
+      {activeTab === 'psb_admin' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl p-6 border border-gray-150 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-left">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2"><UserCheck className="w-5 h-5 text-green-700" /> Penerimaan Santri Baru (PSB)</h3>
+              <p className="text-xs text-slate-500 font-semibold mt-1">Konfigurasi landing, dashboard pendaftar, verifikasi admin, dan ekspor Excel.</p>
+            </div>
+            <span className={`px-4 py-2 rounded-2xl border text-xs font-black ${psbIsOpen ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>Tombol Landing: {psbIsOpen ? 'Aktif' : 'Nonaktif'}</span>
+          </div>
+
+          <div className="bg-slate-200/60 p-1 rounded-2xl flex gap-1 text-xs font-black">
+            {[
+              { id: 'dashboard', label: 'Dashboard PSB' },
+              { id: 'konfigurasi', label: 'Konfigurasi' },
+              { id: 'pendaftar', label: 'Detail Pendaftar' }
+            ].map((tab) => (
+              <button key={tab.id} type="button" onClick={() => setPsbSubTab(tab.id as typeof psbSubTab)} className={`flex-1 py-3 rounded-xl transition-all cursor-pointer ${psbSubTab === tab.id ? 'bg-white text-green-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>{tab.label}</button>
+            ))}
+          </div>
+
+          {psbSubTab === 'dashboard' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {[
+                  ['Total Pendaftar', psbStats.total, 'text-slate-800'],
+                  ['Menunggu Verifikasi', psbStats.baru, 'text-amber-600'],
+                  ['Terverifikasi', psbStats.verified, 'text-emerald-700'],
+                  ['Ditolak', psbStats.rejected, 'text-red-600']
+                ].map(([label, value, tone]) => (
+                  <div key={label} className="bg-white rounded-3xl border border-gray-150 p-5 text-left shadow-sm">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-black">{label}</p>
+                    <h4 className={`text-3xl font-black mt-2 ${tone}`}>{value}</h4>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white rounded-3xl border border-gray-150 p-6 text-left">
+                <h4 className="text-sm font-black text-slate-900 uppercase mb-4">Pendaftar Terbaru</h4>
+                <div className="space-y-3">
+                  {psbPendaftarList.slice(0, 6).map((row) => (
+                    <button key={row.id} type="button" onClick={() => { handleOpenPsbDetail(row); setPsbSubTab('pendaftar'); }} className="w-full p-4 rounded-2xl border border-slate-150 hover:border-green-300 bg-slate-50 hover:bg-green-50/40 transition-all text-left flex items-center justify-between gap-3 cursor-pointer">
+                      <div><p className="text-sm font-black text-slate-800 uppercase">{row.nama_lengkap}</p><p className="text-[11px] text-slate-500 font-semibold">{row.nomor_pendaftaran} - {row.jenjang} - {row.no_whatsapp}</p></div>
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${row.status === 'terverifikasi' ? 'bg-emerald-100 text-emerald-800' : row.status === 'ditolak' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{row.status}</span>
+                    </button>
+                  ))}
+                  {psbPendaftarList.length === 0 && <div className="p-8 text-center text-xs font-bold text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">Belum ada pendaftar masuk.</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {psbSubTab === 'konfigurasi' && (
+            <form onSubmit={handleSavePsbConfig} className="bg-white rounded-3xl border border-gray-150 p-6 text-left space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div><h4 className="text-sm font-black text-slate-900 uppercase">Konfigurasi PSB Landing Page</h4><p className="text-xs text-slate-500 font-semibold mt-1">Aktif/nonaktif tombol PSB di landing page dan atur parameter pendaftaran.</p></div>
+                <label className="flex items-center gap-3 bg-slate-50 px-4 py-3 rounded-2xl border border-slate-150 cursor-pointer"><input type="checkbox" checked={psbIsOpen} onChange={(e) => setPsbIsOpen(e.target.checked)} className="w-4 h-4 accent-green-700" /><span className="text-xs font-black text-slate-800 uppercase">Aktifkan PSB</span></label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <input type="text" value={psbTahunAjaran} onChange={(e) => setPsbTahunAjaran(e.target.value)} placeholder="Tahun ajaran" className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-green-500" />
+                <input type="date" value={psbTanggalBuka} onChange={(e) => setPsbTanggalBuka(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-green-500" />
+                <input type="date" value={psbTanggalTutup} onChange={(e) => setPsbTanggalTutup(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-green-500" />
+                <input type="number" value={psbKuota} onChange={(e) => setPsbKuota(Number(e.target.value) || 0)} placeholder="Kuota" className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-green-500" />
+                <input type="number" value={psbBiaya} onChange={(e) => setPsbBiaya(Number(e.target.value) || 0)} placeholder="Biaya" className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-green-500" />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <textarea rows={4} value={psbSyarat} onChange={(e) => setPsbSyarat(e.target.value)} placeholder="Syarat pendaftaran" className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:border-green-500" />
+                <textarea rows={4} value={psbAlur} onChange={(e) => setPsbAlur(e.target.value)} placeholder="Alur pendaftaran" className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:border-green-500" />
+              </div>
+              <div className="flex justify-end"><button type="submit" className="px-6 py-3 bg-green-700 hover:bg-green-800 text-white rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer"><Save className="w-4 h-4" /> Simpan Konfigurasi PSB</button></div>
+            </form>
+          )}
+
+          {psbSubTab === 'pendaftar' && (
+            <div className="space-y-5">
+              <div className="bg-white rounded-3xl border border-gray-150 p-5 flex flex-col lg:flex-row lg:items-center gap-3">
+                <div className="relative flex-1"><Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={psbSearch} onChange={(e) => setPsbSearch(e.target.value)} placeholder="Cari nama, nomor pendaftaran, NISN, wali, WhatsApp..." className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-3 text-xs font-semibold focus:outline-none focus:border-green-500" /></div>
+                <select value={psbStatusFilter} onChange={(e) => setPsbStatusFilter(e.target.value as typeof psbStatusFilter)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold focus:outline-none focus:border-green-500"><option value="semua">Semua Status</option><option value="baru">Baru</option><option value="terverifikasi">Terverifikasi</option><option value="ditolak">Ditolak</option></select>
+                <button type="button" onClick={exportPsbExcel} className="px-5 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 cursor-pointer"><Download className="w-4 h-4" /> Export Excel</button>
+              </div>
+              <div className="bg-white rounded-3xl border border-gray-150 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-black"><tr><th className="px-4 py-3">Nomor</th><th className="px-4 py-3">Calon Santri</th><th className="px-4 py-3">Jenjang</th><th className="px-4 py-3">Wali</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Aksi</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredPsbPendaftar.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 font-black text-slate-800">{row.nomor_pendaftaran}</td>
+                          <td className="px-4 py-3"><p className="font-black text-slate-800 uppercase">{row.nama_lengkap}</p><p className="text-[10px] text-slate-400 font-semibold">NISN: {row.nisn || '-'} - {row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</p></td>
+                          <td className="px-4 py-3 font-bold text-slate-600">{row.jenjang}</td>
+                          <td className="px-4 py-3"><p className="font-bold text-slate-700">{row.nama_wali}</p><p className="text-[10px] text-slate-400">{row.no_whatsapp}</p></td>
+                          <td className="px-4 py-3"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${row.status === 'terverifikasi' ? 'bg-emerald-100 text-emerald-800' : row.status === 'ditolak' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{row.status}</span></td>
+                          <td className="px-4 py-3 text-right"><button type="button" onClick={() => handleOpenPsbDetail(row)} className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-green-800 text-white text-[10px] font-black cursor-pointer inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Detail</button></td>
+                        </tr>
+                      ))}
+                      {filteredPsbPendaftar.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-400 font-bold">Tidak ada data pendaftar sesuai filter.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {psbDetail && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[88vh] overflow-y-auto text-left">
+            <div className="p-6 border-b border-slate-100 flex items-start justify-between gap-4">
+              <div><p className="text-[10px] font-black uppercase text-green-700">{psbDetail.nomor_pendaftaran}</p><h3 className="text-xl font-black text-slate-900 uppercase">{psbDetail.nama_lengkap}</h3><p className="text-xs font-semibold text-slate-500">{psbDetail.jenjang} - {psbDetail.program_pilihan || 'Program belum dipilih'}</p></div>
+              <button type="button" onClick={() => setPsbDetail(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {[
+                ['NISN', psbDetail.nisn || '-'], ['Jenis Kelamin', psbDetail.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'], ['Tempat/Tanggal Lahir', `${psbDetail.tempat_lahir || '-'} / ${psbDetail.tanggal_lahir || '-'}`], ['Asal Sekolah', psbDetail.asal_sekolah || '-'], ['Alamat', psbDetail.alamat || '-'], ['Nama Ayah', psbDetail.nama_ayah || '-'], ['Nama Ibu', psbDetail.nama_ibu || '-'], ['Nama Wali', psbDetail.nama_wali], ['Pekerjaan Wali', psbDetail.pekerjaan_wali || '-'], ['No WhatsApp', psbDetail.no_whatsapp], ['Email', psbDetail.email || '-'], ['Tanggal Daftar', psbDetail.created_at ? new Date(psbDetail.created_at).toLocaleString('id-ID') : '-']
+              ].map(([label, value]) => <div key={label} className="rounded-2xl bg-slate-50 border border-slate-150 p-4"><p className="text-[10px] font-black uppercase text-slate-400">{label}</p><p className="text-sm font-bold text-slate-800 mt-1">{value}</p></div>)}
+              <div className="lg:col-span-2 rounded-2xl bg-slate-50 border border-slate-150 p-4"><p className="text-[10px] font-black uppercase text-slate-400">Catatan Pendaftar</p><p className="text-sm font-semibold text-slate-700 mt-1">{psbDetail.catatan || '-'}</p></div>
+              <div className="lg:col-span-2"><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Catatan Admin / Verifikasi:</label><textarea rows={3} value={psbAdminNote} onChange={(e) => setPsbAdminNote(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:border-green-500" /></div>
+            </div>
+            <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-3"><button type="button" onClick={() => handleUpdatePsbStatus(psbDetail, 'ditolak')} className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black cursor-pointer">Tolak Pendaftar</button><button type="button" onClick={() => handleUpdatePsbStatus(psbDetail, 'terverifikasi')} className="px-5 py-3 rounded-xl bg-green-700 hover:bg-green-800 text-white text-xs font-black cursor-pointer">Verifikasi Pendaftar</button></div>
+          </div>
+        </div>
       )}
 
       {/* Tab: Create bulking billing tagihans */}

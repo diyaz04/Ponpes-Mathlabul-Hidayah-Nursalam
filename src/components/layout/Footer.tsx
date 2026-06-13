@@ -11,6 +11,7 @@ type SocialLink = {
 
 export interface FooterProps {
   profilPP?: ProfilPesantren | null;
+  psbEnabled?: boolean;
   onNavigate?: (tab: 'beranda' | 'profil' | 'program' | 'berita' | 'faq' | 'psb' | 'masuk') => void;
 }
 
@@ -28,7 +29,7 @@ const getSocialIcon = (platform?: string) => {
   return Globe;
 };
 
-export function Footer({ profilPP, onNavigate }: FooterProps) {
+export function Footer({ profilPP, psbEnabled = true, onNavigate }: FooterProps) {
   const socialLinks: SocialLink[] = (() => {
     if (!profilPP?.social_links_json) return [];
     try {
@@ -135,13 +136,15 @@ export function Footer({ profilPP, onNavigate }: FooterProps) {
                 <a href="#berita">Berita Terbaru</a>
               )}
             </li>
-            <li className="hover:text-green-500 transition-colors">
-              {onNavigate ? (
-                <button onClick={() => onNavigate('psb')} className="cursor-pointer hover:text-green-400 transition-colors text-left bg-transparent border-none p-0">Penerimaan Santri Baru (PSB)</button>
-              ) : (
-                <a href="#psb">Penerimaan Santri Baru (PSB)</a>
-              )}
-            </li>
+            {psbEnabled && (
+              <li className="hover:text-green-500 transition-colors">
+                {onNavigate ? (
+                  <button onClick={() => onNavigate('psb')} className="cursor-pointer hover:text-green-400 transition-colors text-left bg-transparent border-none p-0">Penerimaan Santri Baru (PSB)</button>
+                ) : (
+                  <a href="#psb">Penerimaan Santri Baru (PSB)</a>
+                )}
+              </li>
+            )}
           </ul>
         </div>
       </div>
