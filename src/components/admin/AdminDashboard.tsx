@@ -1059,12 +1059,18 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     return loadImageAsDataUrl(qrUrl);
   };
 
+  const getCardPesantrenInfo = () => ({
+    nama: profilPP?.nama || 'Pondok Pesantren Mathlabul Hidayah',
+    alamat: profilPP?.alamat || 'Cigalontang - Kabupaten Tasikmalaya - Jawa Barat',
+  });
+
   const drawSantriCard = async (doc: jsPDF, santri: Santri, x: number, y: number) => {
     const cardW = 85.6;
     const cardH = 54;
     const logoData = await loadImageAsDataUrl(MATHLABUL_HIDAYAH_LOGO_URL);
     const photoData = santri.foto_url ? await loadImageAsDataUrl(santri.foto_url) : null;
     const qrData = await getQrDataUrl(santri.nis);
+    const pesantren = getCardPesantrenInfo();
 
     doc.setFillColor(255, 255, 255);
     doc.roundedRect(x, y, cardW, cardH, 3, 3, 'F');
@@ -1088,10 +1094,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.setFontSize(6.2);
     doc.text('KARTU TANDA SANTRI', x + 16.5, y + 5.3);
     doc.setFontSize(5.3);
-    doc.text('PONDOK PESANTREN MATHLABUL HIDAYAH', x + 16.5, y + 9.2);
+    doc.text(pesantren.nama.toUpperCase(), x + 16.5, y + 9.2, { maxWidth: 65 });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(4.2);
-    doc.text('Cigalontang - Kabupaten Tasikmalaya - Jawa Barat', x + 16.5, y + 12.7);
+    doc.text(pesantren.alamat, x + 16.5, y + 12.7, { maxWidth: 65 });
 
     doc.setFillColor(240, 253, 244);
     doc.roundedRect(x + 4, y + 20, 20, 25, 2, 2, 'F');
@@ -1137,10 +1143,53 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.text('Kartu ini berlaku selama santri tercatat aktif di pesantren.', x + 54.2, y + 49.7, { align: 'center' });
   };
 
+  const drawSantriCardBack = async (doc: jsPDF, x: number, y: number) => {
+    const cardW = 85.6;
+    const cardH = 54;
+    const logoData = await loadImageAsDataUrl(MATHLABUL_HIDAYAH_LOGO_URL);
+    const pesantren = getCardPesantrenInfo();
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, cardW, cardH, 3, 3, 'F');
+    doc.setDrawColor(16, 185, 129);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(x, y, cardW, cardH, 3, 3, 'S');
+
+    doc.setFillColor(5, 95, 70);
+    doc.roundedRect(x, y, cardW, 16, 3, 3, 'F');
+    doc.setFillColor(245, 158, 11);
+    doc.rect(x, y + 15.4, cardW, 1.2, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.2);
+    doc.text('KARTU SANTRI', x + cardW / 2, y + 6.2, { align: 'center' });
+    doc.setFontSize(4.4);
+    doc.setFont('helvetica', 'normal');
+    doc.text(pesantren.nama, x + cardW / 2, y + 11.2, { align: 'center', maxWidth: 74 });
+
+    if (logoData) {
+      doc.setFillColor(236, 253, 245);
+      doc.roundedRect(x + 31.8, y + 19.2, 22, 22, 4, 4, 'F');
+      doc.addImage(logoData, 'PNG', x + 35, y + 22.3, 15.6, 15.6);
+    }
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.2);
+    doc.text(pesantren.nama.toUpperCase(), x + cardW / 2, y + 44.4, { align: 'center', maxWidth: 74 });
+    doc.setTextColor(71, 85, 105);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(4.5);
+    doc.text(pesantren.alamat, x + cardW / 2, y + 49.2, { align: 'center', maxWidth: 76 });
+  };
+
   const downloadSantriCardPDF = async (santri: Santri) => {
     setActionDoneMsg(`Menyiapkan kartu santri ${santri.nama}...`);
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [85.6, 54] });
     await drawSantriCard(doc, santri, 0, 0);
+    doc.addPage([85.6, 54], 'landscape');
+    await drawSantriCardBack(doc, 0, 0);
     doc.save(`Kartu_Santri_${santri.nis}_${santri.nama.replace(/\s+/g, '_')}.pdf`);
     setActionDoneMsg(`✅ Kartu santri ${santri.nama} berhasil diunduh.`);
     setTimeout(() => setActionDoneMsg(null), 4000);
@@ -1173,6 +1222,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setActionDoneMsg(`Menyiapkan ${i + 1} / ${activeSantri.length} kartu santri...`);
     }
 
+    doc.addPage();
+    await drawSantriCardBack(doc, 62.2, 121.5);
     doc.save(`Kartu_Santri_Aktif_${new Date().toISOString().slice(0, 10)}.pdf`);
     setIsPrintingCards(false);
     setActionDoneMsg(`✅ ${activeSantri.length} kartu santri berhasil diunduh dalam satu PDF.`);
