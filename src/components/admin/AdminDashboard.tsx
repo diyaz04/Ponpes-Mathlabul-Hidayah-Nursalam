@@ -272,6 +272,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [reportFilterType, setReportFilterType] = useState<'bulan' | 'tanggal' | 'rentang'>('bulan');
   const [filterBulan, setFilterBulan] = useState('Juni');
   const [filterTahun, setFilterTahun] = useState('2026');
+  const [sppRekapTahun, setSppRekapTahun] = useState('2026');
   const [filterSingleDate, setFilterSingleDate] = useState('2026-06-01');
   const [filterStartDate, setFilterStartDate] = useState('2026-05-01');
   const [filterEndDate, setFilterEndDate] = useState('2026-06-30');
@@ -414,6 +415,27 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
   const getJenisName = (id: string) => {
     return jPembayaranList.find(j => j.id === id)?.nama || 'Jenis Pembayaran';
+  };
+
+  const monthNamesFull = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+  const getSppSyahriahJenisIds = () => {
+    const strictMatches = jPembayaranList.filter(j => {
+      const name = j.nama.toLowerCase();
+      return name.includes('spp') && (name.includes('syahriah') || name.includes('syahriyah') || name.includes('syahriyyah'));
+    });
+
+    if (strictMatches.length > 0) {
+      return strictMatches.map(j => j.id);
+    }
+
+    return jPembayaranList
+      .filter(j => j.nama.toLowerCase().includes('spp'))
+      .map(j => j.id);
+  };
+
+  const isSppBillPaid = (bill: Tagihan) => {
+    return bill.status === 'lunas';
   };
 
   const isCashPayment = (payment: Pembayaran) => {
@@ -4928,6 +4950,122 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                         ))}
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Rekap SPP Syahriah Per Santri */}
+          {(() => {
+            const sppJenisIds = getSppSyahriahJenisIds();
+            const sppBillsForYear = bills.filter(b => sppJenisIds.includes(b.jenis_id) && b.tahun === sppRekapTahun);
+            const santriIdsWithSpp = new Set(sppBillsForYear.map(b => b.santri_id));
+            const rows = santriList
+              .filter(s => s.status === 'aktif' || santriIdsWithSpp.has(s.id))
+              .slice()
+              .sort((a, b) => a.nama.localeCompare(b.nama));
+            const paidCount = rows.reduce((sum, santri) => {
+              return sum + monthNamesFull.filter(month => sppBillsForYear.some(b => b.santri_id === santri.id && b.bulan === month && isSppBillPaid(b))).length;
+            }, 0);
+
+            return (
+              <div className="bg-white rounded-3xl p-6 border border-gray-150 space-y-5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                  <div className="text-left">
+                    <h4 className="font-extrabold text-gray-900 text-xs uppercase tracking-widest flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700" /> Rekap SPP Syahriah Per Santri
+                    </h4>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Centang muncul saat tagihan SPP Syahriah pada bulan tersebut sudah lunas.</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                    <div className="bg-slate-50 border border-slate-150 rounded-2xl px-4 py-2">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Tahun Rekap</span>
+                      <input
+                        type="text"
+                        value={sppRekapTahun}
+                        onChange={(e) => setSppRekapTahun(e.target.value)}
+                        className="bg-transparent outline-none text-sm font-black text-slate-800 font-mono w-28"
+                        placeholder="2026"
+                      />
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-2 min-w-36">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-emerald-800 block">Bulan Lunas</span>
+                      <span className="text-sm font-black text-emerald-700">{paidCount} centang</span>
+                    </div>
+                  </div>
+                </div>
+
+                {sppJenisIds.length === 0 ? (
+                  <div className="py-10 text-center bg-amber-50 rounded-2xl border border-amber-100">
+                    <p className="text-xs font-black text-amber-800">Kategori SPP Syahriah belum ditemukan.</p>
+                    <p className="text-[11px] text-amber-700 mt-1">Pastikan nama jenis tagihan mengandung kata SPP dan Syahriah/Syahriyah.</p>
+                  </div>
+                ) : rows.length === 0 ? (
+                  <div className="py-10 text-center bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400">Belum ada santri/tagihan SPP Syahriah pada tahun {sppRekapTahun}.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-150">
+                    <table className="w-full text-xs text-left min-w-[1080px] bg-white">
+                      <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase font-black tracking-wider border-b border-slate-150">
+                        <tr>
+                          <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 min-w-60">Nama Santri</th>
+                          <th className="px-3 py-3 text-center">Status</th>
+                          {monthNamesFull.map(month => (
+                            <th key={month} className="px-3 py-3 text-center min-w-20">{month.substring(0, 3)}</th>
+                          ))}
+                          <th className="px-3 py-3 text-center">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {rows.map(santri => {
+                          const paidMonths = monthNamesFull.filter(month => sppBillsForYear.some(b => b.santri_id === santri.id && b.bulan === month && isSppBillPaid(b)));
+                          return (
+                            <tr key={santri.id} className="hover:bg-slate-50/60">
+                              <td className="px-4 py-3 sticky left-0 bg-white z-10 border-r border-slate-100">
+                                <span className="font-black text-slate-800 block">{santri.nama}</span>
+                                <span className="text-[10px] text-slate-400">{santri.nis} - {santri.kelas}</span>
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${
+                                  santri.status === 'aktif' ? 'bg-emerald-50 text-emerald-700' :
+                                  santri.status === 'alumni' ? 'bg-amber-50 text-amber-700' :
+                                  'bg-orange-50 text-orange-700'
+                                }`}>
+                                  {santri.status}
+                                </span>
+                              </td>
+                              {monthNamesFull.map(month => {
+                                const monthBills = sppBillsForYear.filter(b => b.santri_id === santri.id && b.bulan === month);
+                                const paid = monthBills.some(isSppBillPaid);
+                                const hasBill = monthBills.length > 0;
+                                return (
+                                  <td key={month} className="px-3 py-3 text-center">
+                                    {paid ? (
+                                      <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200" title={`${month} lunas`}>
+                                        <Check className="w-4 h-4" />
+                                      </span>
+                                    ) : hasBill ? (
+                                      <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-black" title={`${month} belum lunas`}>
+                                        -
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-slate-50 text-slate-300 border border-slate-100" title={`${month} belum ada tagihan`}>
+                                        -
+                                      </span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-3 py-3 text-center font-black text-emerald-700">
+                                {paidMonths.length}/12
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
