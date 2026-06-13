@@ -23,6 +23,7 @@ export function Sidebar({ role, activeMenu, setActiveMenu, onLogout, isOpen = fa
         return [
           { id: 'overview', name: 'Ringkasan', icon: LayoutDashboard },
           { id: 'santri', name: 'Manajemen Santri', icon: Users },
+          { id: 'alumni', name: 'Alumni & Arsip', icon: GraduationCap },
           { id: 'pelanggaran', name: 'Data Pelanggaran', icon: ShieldAlert },
           { id: 'hapalan', name: 'Data Hapalan', icon: BookOpen },
           { id: 'raport', name: 'Kelola Raport', icon: FileText },

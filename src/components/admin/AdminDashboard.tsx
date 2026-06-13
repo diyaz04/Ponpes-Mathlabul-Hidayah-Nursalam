@@ -21,7 +21,7 @@ import {
 } from '../../types';
 import { ImageUploader } from '../shared/ImageUploader';
 import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
-import { RaportPanel } from '../raport/RaportPanel';
+import { RaportPanel, getRaportPredikat } from '../raport/RaportPanel';
 
 export interface AdminDashboardProps {
   activeTab?: string;
@@ -128,6 +128,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [pWaliId, setPWaliId] = useState('p-wali1');
   const [pBulanMasuk, setPBulanMasuk] = useState('Januari');
   const [pTahunMasuk, setPTahunMasuk] = useState('2026');
+  const [pStatus, setPStatus] = useState<Santri['status']>('aktif');
 
   // Forms: Bulking Invoices Create
   const [selJenisId, setSelJenisId] = useState('');
@@ -320,6 +321,9 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   // States for Admin-Side Wali/Santri Association Management
   const [adminSelectedWaliId, setAdminSelectedWaliId] = useState('p-wali1');
   const [adminLinkNis, setAdminLinkNis] = useState('');
+  const [searchAlumni, setSearchAlumni] = useState('');
+  const [alumniDetail, setAlumniDetail] = useState<Santri | null>(null);
+  const [alumniDetailTab, setAlumniDetailTab] = useState<'biodata' | 'pembayaran' | 'raport' | 'hafalan' | 'pelanggaran'>('biodata');
 
   const refreshAdminData = async () => {
     try {
@@ -495,6 +499,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setPWaliId(s.wali_id || 'p-wali1');
       setPBulanMasuk(s.bulan_masuk || 'Januari');
       setPTahunMasuk(s.tahun_masuk || '2026');
+      setPStatus(s.status || 'aktif');
     } else {
       setPupilId('');
       setPNis('');
@@ -507,6 +512,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setPWaliId('__buat_baru__'); // Default to create new parent automagically
       setPBulanMasuk('Januari');
       setPTahunMasuk('2026');
+      setPStatus('aktif');
     }
     setShowPupilModal(true);
   };
@@ -936,9 +942,9 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               kelas: pKelas,
               kamar: pKamar,
               jenis_kelamin: pJK,
-              tanggal_lahir: pBirth,
-              alamat: pAlamat,
-              status: 'aktif',
+            tanggal_lahir: pBirth,
+            alamat: pAlamat,
+              status: pStatus,
               tahun_masuk: pTahunMasuk,
               bulan_masuk: pBulanMasuk
             }
@@ -982,6 +988,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             tanggal_lahir: pBirth,
             alamat: pAlamat || null,
             wali_id: finalWaliId === '__buat_baru__' ? null : finalWaliId,
+            status: pStatus,
             bulan_masuk: pBulanMasuk,
             tahun_masuk: pTahunMasuk
           })
@@ -998,7 +1005,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           tanggal_lahir: pBirth,
           alamat: pAlamat || null,
           wali_id: finalWaliId,
-          status: 'aktif',
+          status: pStatus,
           tahun_masuk: pTahunMasuk,
           bulan_masuk: pBulanMasuk
         });
@@ -1043,6 +1050,212 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         setTimeout(() => setActionDoneMsg(null), 3000);
       }
     );
+  };
+
+  const handleChangeSantriStatus = (santri: Santri, status: Santri['status']) => {
+    const label = status === 'aktif' ? 'aktifkan kembali' : status === 'alumni' ? 'jadikan alumni' : 'tandai keluar';
+    triggerConfirm(
+      'Ubah Status Santri',
+      `Yakin ingin ${label} untuk ${santri.nama}? Data riwayat tetap tersimpan dan tagihan baru hanya akan berlaku untuk status aktif.`,
+      async () => {
+        const { error } = await supabase.from('santri').update({ status }).eq('id', santri.id);
+        if (error) {
+          setActionDoneMsg(`Gagal mengubah status santri: ${error.message}`);
+        } else {
+          setActionDoneMsg(`Status ${santri.nama} berhasil diubah menjadi ${status}.`);
+          await refreshAdminData();
+          if (alumniDetail?.id === santri.id) {
+            setAlumniDetail(status === 'aktif' ? null : { ...santri, status });
+          }
+        }
+        setTimeout(() => setActionDoneMsg(null), 4000);
+      }
+    );
+  };
+
+  const getSantriArchive = (santri: Santri) => {
+    const santriBills = bills.filter(b => b.santri_id === santri.id);
+    const billIds = santriBills.map(b => b.id);
+    const santriPayments = payments.filter(p => billIds.includes(p.tagihan_id));
+    const santriViolations = violationsList.filter(v => v.santri_id === santri.id);
+    const santriHapalan = hapalanList.filter(h => h.santri_id === santri.id);
+    const raportRows = dbLocal.getRaport().filter(r => r.santri_id === santri.id);
+
+    return { santriBills, santriPayments, santriViolations, santriHapalan, raportRows };
+  };
+
+  const getRaportAverageForArchive = (raport: ReturnType<typeof dbLocal.getRaport>[number]) => {
+    const kelasMapel = dbLocal.getKelasMapel().filter(km => km.kelas_id === raport.kelas_id);
+    const nilai = dbLocal.getNilaiSantri().filter(n =>
+      n.santri_id === raport.santri_id &&
+      n.semester === raport.semester &&
+      n.tahun_ajaran === raport.tahun_ajaran &&
+      kelasMapel.some(km => km.id === n.kelas_mapel_id)
+    );
+    if (nilai.length === 0) return 0;
+    return nilai.reduce((sum, item) => sum + Number(item.nilai_akhir || 0), 0) / nilai.length;
+  };
+
+  const downloadSantriArchivePDF = async (santri: Santri) => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const logo = await loadImageAsDataUrl(MATHLABUL_HIDAYAH_LOGO_URL);
+    const wali = profilesList.find(p => p.id === santri.wali_id);
+    const { santriBills, santriPayments, santriViolations, santriHapalan, raportRows } = getSantriArchive(santri);
+    const kelasListRaport = dbLocal.getRaportKelas();
+    const mapelListRaport = dbLocal.getMataPelajaran();
+    const kelasMapelListRaport = dbLocal.getKelasMapel();
+    const nilaiListRaport = dbLocal.getNilaiSantri();
+
+    const drawKop = () => {
+      doc.setFillColor(6, 95, 70);
+      doc.rect(0, 0, 210, 22, 'F');
+      doc.setFillColor(245, 158, 11);
+      doc.rect(0, 22, 210, 2, 'F');
+      if (logo) doc.addImage(logo, 'PNG', 14, 31, 24, 24);
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text('Pondok Pesantren Mathlabul Hidayah Nursalam', 44, 36);
+      doc.setFontSize(9);
+      doc.setTextColor(4, 120, 87);
+      doc.text('ARSIP RIWAYAT SANTRI', 44, 43);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text('Cigalontang-Kabupaten Tasikmalaya-Jawa Barat', 44, 50);
+      doc.setDrawColor(203, 213, 225);
+      doc.line(14, 62, 196, 62);
+    };
+
+    const addSectionTitle = (title: string, y: number) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(title, 14, y);
+    };
+
+    drawKop();
+    let y = 73;
+
+    addSectionTitle('Biodata Santri', y);
+    autoTable(doc, {
+      startY: y + 5,
+      theme: 'plain',
+      styles: { fontSize: 8, cellPadding: 1.8 },
+      body: [
+        ['NIS', santri.nis, 'Nama', santri.nama],
+        ['Status', santri.status.toUpperCase(), 'Kelas/Kamar', `${santri.kelas} / ${santri.kamar || '-'}`],
+        ['Jenis Kelamin', santri.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan', 'Tanggal Lahir', santri.tanggal_lahir],
+        ['Wali', wali?.full_name || '-', 'Kontak Wali', wali?.phone || wali?.email || '-'],
+        ['Masuk Pondok', `${santri.bulan_masuk || '-'} ${santri.tahun_masuk || '-'}`, 'Alamat', santri.alamat || '-']
+      ],
+      columnStyles: { 0: { fontStyle: 'bold', textColor: [71, 85, 105] }, 2: { fontStyle: 'bold', textColor: [71, 85, 105] } }
+    });
+
+    y = ((doc as any).lastAutoTable?.finalY || y + 28) + 12;
+    addSectionTitle('Riwayat Pembayaran', y);
+    autoTable(doc, {
+      startY: y + 5,
+      head: [['Periode', 'Jenis Tagihan', 'Nominal Tagihan', 'Status', 'Dibayar']],
+      body: santriBills.length ? santriBills.map(b => {
+        const paid = santriPayments.filter(p => p.tagihan_id === b.id && p.status === 'lunas').reduce((sum, p) => sum + p.nominal, 0);
+        return [`${b.bulan} ${b.tahun}`, getJenisName(b.jenis_id), `Rp ${b.nominal.toLocaleString('id-ID')}`, b.status, `Rp ${paid.toLocaleString('id-ID')}`];
+      }) : [['-', 'Belum ada riwayat tagihan', '-', '-', '-']],
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [6, 95, 70] }
+    });
+
+    y = ((doc as any).lastAutoTable?.finalY || y + 20) + 12;
+    addSectionTitle('Riwayat Raport', y);
+    autoTable(doc, {
+      startY: y + 5,
+      head: [['Kelas', 'Semester', 'Tahun Ajaran', 'Status', 'Rata-rata', 'Predikat']],
+      body: raportRows.length ? raportRows.map(r => {
+        const avg = getRaportAverageForArchive(r);
+        return [
+          kelasListRaport.find(k => k.id === r.kelas_id)?.nama_kelas || '-',
+          r.semester,
+          r.tahun_ajaran,
+          r.status,
+          avg.toFixed(2),
+          getRaportPredikat(avg)
+        ];
+      }) : [['-', 'Belum ada raport', '-', '-', '-', '-']],
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [6, 95, 70] }
+    });
+
+    doc.addPage();
+    drawKop();
+    y = 73;
+    addSectionTitle('Riwayat Pelanggaran', y);
+    autoTable(doc, {
+      startY: y + 5,
+      head: [['Tanggal', 'Jenis', 'Poin', 'Status', 'Deskripsi']],
+      body: santriViolations.length ? santriViolations.map(v => [
+        v.tanggal,
+        getJenisVName(v.jenis_id),
+        `${v.poin}`,
+        v.status,
+        v.deskripsi || '-'
+      ]) : [['-', 'Tidak ada catatan pelanggaran', '-', '-', '-']],
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [127, 29, 29] }
+    });
+
+    y = ((doc as any).lastAutoTable?.finalY || y + 20) + 12;
+    addSectionTitle('Catatan Hafalan', y);
+    autoTable(doc, {
+      startY: y + 5,
+      head: [['Tanggal', 'Program', 'Surah/Bab', 'Rentang', 'Volume', 'Nilai', 'Catatan']],
+      body: santriHapalan.length ? santriHapalan.map(h => [
+        h.tanggal,
+        h.jenis,
+        h.surah_nama,
+        `${h.ayat_dari} - ${h.ayat_sampai}`,
+        `${h.jumlah_halaman}`,
+        h.nilai,
+        h.catatan || '-'
+      ]) : [['-', 'Belum ada catatan hafalan', '-', '-', '-', '-', '-']],
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [30, 64, 175] }
+    });
+
+    if (raportRows.length > 0) {
+      doc.addPage();
+      drawKop();
+      y = 73;
+      addSectionTitle('Detail Nilai Raport', y);
+      const detailRows = raportRows.flatMap(r => {
+        const km = kelasMapelListRaport.filter(item => item.kelas_id === r.kelas_id);
+        return km.map(item => {
+          const nilai = nilaiListRaport.find(n =>
+            n.santri_id === santri.id &&
+            n.kelas_mapel_id === item.id &&
+            n.semester === r.semester &&
+            n.tahun_ajaran === r.tahun_ajaran
+          );
+          const akhir = Number(nilai?.nilai_akhir || 0);
+          return [
+            `${kelasListRaport.find(k => k.id === r.kelas_id)?.nama_kelas || '-'} / ${r.semester}`,
+            mapelListRaport.find(m => m.id === item.mapel_id)?.nama_pelajaran || '-',
+            `${nilai?.nilai_harian ?? 0}`,
+            `${nilai?.nilai_uas ?? 0}`,
+            akhir.toFixed(2),
+            getRaportPredikat(akhir)
+          ];
+        });
+      });
+      autoTable(doc, {
+        startY: y + 5,
+        head: [['Kelas/Semester', 'Mata Pelajaran', 'Harian', 'UAS', 'Akhir', 'Predikat']],
+        body: detailRows,
+        styles: { fontSize: 7.5, cellPadding: 2 },
+        headStyles: { fillColor: [6, 95, 70] }
+      });
+    }
+
+    const safeName = santri.nama.replace(/\s+/g, '_');
+    doc.save(`Arsip_Riwayat_${santri.nis}_${safeName}.pdf`);
   };
 
   // Dynamic Excel (.xlsx) Santri & Wali Import handlers
@@ -1396,11 +1609,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         return;
       }
       const selectedS = santriList.find(s => s.id === targetSantriId);
-      eligibleStudents = selectedS ? [selectedS] : [];
+      eligibleStudents = selectedS && selectedS.status === 'aktif' ? [selectedS] : [];
     } else {
       eligibleStudents = bypassEntranceFilter 
-        ? santriList 
+        ? santriList.filter(s => s.status === 'aktif')
         : santriList.filter(s => {
+            if (s.status !== 'aktif') return false;
             const joinYear = parseYear(s.tahun_masuk);
             const joinMonthIdx = monthNames.findIndex(m => m.toLowerCase() === (s.bulan_masuk || 'Januari').toLowerCase());
             
@@ -1417,7 +1631,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       return;
     }
 
-    const skippedCount = targetScope === 'santri' ? 0 : (santriList.length - eligibleStudents.length);
+    const activeStudentCount = santriList.filter(s => s.status === 'aktif').length;
+    const skippedCount = targetScope === 'santri' ? 0 : (activeStudentCount - eligibleStudents.length);
 
     triggerConfirm(
       targetScope === 'santri' ? 'Konfirmasi Kirim Tagihan Spesifik' : 'Konfirmasi Kirim Tagihan Bulk',
@@ -2877,11 +3092,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   <th className="px-4 py-3">Nama Lengkap</th>
                   <th className="px-4 py-3">Kelas / Kamar</th>
                   <th className="px-4 py-3">Wali Santri</th>
+                  <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Opsi Operasi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
-                {santriList.filter(s => s.nama.toLowerCase().includes(searchSantri.toLowerCase()) || s.kelas.toLowerCase().includes(searchSantri.toLowerCase())).map((s) => (
+                {santriList.filter(s => s.status === 'aktif' && (s.nama.toLowerCase().includes(searchSantri.toLowerCase()) || s.kelas.toLowerCase().includes(searchSantri.toLowerCase()))).map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-gray-500">{s.nis}</td>
                     <td className="px-4 py-3 font-extrabold text-slate-800">{s.nama}</td>
@@ -2890,6 +3106,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                       <span className="text-[10px] text-gray-400 block font-normal">Kamar {s.kamar || 'Belum Ditunjuk'}</span>
                     </td>
                     <td className="px-4 py-3 text-green-700">{getWaliName(s.wali_id)}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-black uppercase">
+                        {s.status}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-right space-x-1">
                       <button
                         onClick={() => resetAndPrintBiodata(s)}
@@ -2904,6 +3125,18 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                       >
                         Edit
                       </button>
+                      <button
+                        onClick={() => handleChangeSantriStatus(s, 'alumni')}
+                        className="p-1 px-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-lg cursor-pointer"
+                      >
+                        Jadikan Alumni
+                      </button>
+                      <button
+                        onClick={() => handleChangeSantriStatus(s, 'keluar')}
+                        className="p-1 px-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold rounded-lg cursor-pointer"
+                      >
+                        Keluar
+                      </button>
                       <button 
                         onClick={() => handleDeletePupil(s.id)}
                         className="p-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg cursor-pointer"
@@ -2915,6 +3148,231 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'alumni' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl p-6 border border-gray-150 space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <h4 className="font-extrabold text-gray-900 text-xs uppercase tracking-widest">Alumni & Arsip Santri</h4>
+                <p className="text-[11px] text-gray-400 mt-1">Data santri alumni/keluar tetap tersimpan dan seluruh riwayatnya bisa dibuka kembali.</p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchAlumni}
+                  onChange={(e) => setSearchAlumni(e.target.value)}
+                  placeholder="Cari alumni, kelas, atau NIS..."
+                  className="w-full lg:w-72 bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold"
+                />
+                {alumniDetail && (
+                  <button
+                    onClick={() => downloadSantriArchivePDF(alumniDetail)}
+                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" /> PDF Lengkap
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className="space-y-3">
+                {santriList.filter(s => s.status !== 'aktif' && (
+                  s.nama.toLowerCase().includes(searchAlumni.toLowerCase()) ||
+                  s.kelas.toLowerCase().includes(searchAlumni.toLowerCase()) ||
+                  s.nis.toLowerCase().includes(searchAlumni.toLowerCase())
+                )).map(s => {
+                  const archive = getSantriArchive(s);
+                  const isSelected = alumniDetail?.id === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setAlumniDetail(s);
+                        setAlumniDetailTab('biodata');
+                      }}
+                      className={`w-full text-left rounded-2xl border p-4 transition-all ${
+                        isSelected ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black text-slate-800 text-sm">{s.nama}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{s.nis} - {s.kelas}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${
+                          s.status === 'alumni' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-orange-50 text-orange-700 border border-orange-100'
+                        }`}>
+                          {s.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 mt-4 text-center text-[10px]">
+                        <div className="bg-slate-50 rounded-lg py-2"><b>{archive.santriBills.length}</b><span className="block text-slate-400">Tagihan</span></div>
+                        <div className="bg-slate-50 rounded-lg py-2"><b>{archive.raportRows.length}</b><span className="block text-slate-400">Raport</span></div>
+                        <div className="bg-slate-50 rounded-lg py-2"><b>{archive.santriHapalan.length}</b><span className="block text-slate-400">Hafalan</span></div>
+                        <div className="bg-slate-50 rounded-lg py-2"><b>{archive.santriViolations.length}</b><span className="block text-slate-400">Pelanggaran</span></div>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {santriList.filter(s => s.status !== 'aktif').length === 0 && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center">
+                    <GraduationCap className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                    <p className="font-black text-slate-700 text-sm">Belum ada data alumni/keluar.</p>
+                    <p className="text-xs text-slate-400 mt-1">Ubah status santri aktif menjadi alumni atau keluar dari Manajemen Santri.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="xl:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden min-h-[520px]">
+                {alumniDetail ? (() => {
+                  const archive = getSantriArchive(alumniDetail);
+                  const wali = profilesList.find(p => p.id === alumniDetail.wali_id);
+                  const tabs = [
+                    { id: 'biodata', label: 'Biodata' },
+                    { id: 'pembayaran', label: 'Riwayat Pembayaran' },
+                    { id: 'raport', label: 'Raport' },
+                    { id: 'hafalan', label: 'Catatan Hafalan' },
+                    { id: 'pelanggaran', label: 'Catatan Pelanggaran' }
+                  ] as const;
+
+                  return (
+                    <div>
+                      <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Detail Arsip Santri</p>
+                          <h3 className="font-black text-slate-900 text-xl">{alumniDetail.nama}</h3>
+                          <p className="text-xs text-slate-400">{alumniDetail.nis} - {alumniDetail.kelas} - Status {alumniDetail.status}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => downloadSantriArchivePDF(alumniDetail)} className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black flex items-center gap-2">
+                            <Download className="w-4 h-4" /> Download PDF
+                          </button>
+                          <button onClick={() => handleChangeSantriStatus(alumniDetail, 'aktif')} className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-black">
+                            Aktifkan Lagi
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-white border-b border-slate-100 flex gap-2 overflow-x-auto">
+                        {tabs.map(tab => (
+                          <button
+                            key={tab.id}
+                            onClick={() => setAlumniDetailTab(tab.id)}
+                            className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap ${
+                              alumniDetailTab === tab.id ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:bg-slate-50'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="p-5">
+                        {alumniDetailTab === 'biodata' && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            {[
+                              ['NIS', alumniDetail.nis],
+                              ['Nama Lengkap', alumniDetail.nama],
+                              ['Status', alumniDetail.status.toUpperCase()],
+                              ['Kelas Terakhir', alumniDetail.kelas],
+                              ['Kamar', alumniDetail.kamar || '-'],
+                              ['Jenis Kelamin', alumniDetail.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'],
+                              ['Tanggal Lahir', alumniDetail.tanggal_lahir],
+                              ['Wali Santri', wali?.full_name || '-'],
+                              ['Kontak Wali', wali?.phone || wali?.email || '-'],
+                              ['Masuk Pondok', `${alumniDetail.bulan_masuk || '-'} ${alumniDetail.tahun_masuk || '-'}`],
+                              ['Alamat', alumniDetail.alamat || '-']
+                            ].map(([label, value]) => (
+                              <div key={label} className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                <p className="text-[10px] text-slate-400 font-black uppercase">{label}</p>
+                                <p className="font-black text-slate-800 mt-1">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {alumniDetailTab === 'pembayaran' && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left">
+                              <thead className="bg-slate-50 text-slate-500 uppercase">
+                                <tr><th className="px-4 py-3">Periode</th><th className="px-4 py-3">Jenis</th><th className="px-4 py-3">Nominal</th><th className="px-4 py-3">Dibayar</th><th className="px-4 py-3">Status</th></tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {archive.santriBills.map(b => {
+                                  const paid = archive.santriPayments.filter(p => p.tagihan_id === b.id && p.status === 'lunas').reduce((sum, p) => sum + p.nominal, 0);
+                                  return <tr key={b.id}><td className="px-4 py-3">{b.bulan} {b.tahun}</td><td className="px-4 py-3 font-bold">{getJenisName(b.jenis_id)}</td><td className="px-4 py-3">Rp {b.nominal.toLocaleString('id-ID')}</td><td className="px-4 py-3">Rp {paid.toLocaleString('id-ID')}</td><td className="px-4 py-3 font-black">{b.status}</td></tr>;
+                                })}
+                                {archive.santriBills.length === 0 && <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">Belum ada riwayat pembayaran.</td></tr>}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {alumniDetailTab === 'raport' && (
+                          <div className="space-y-3">
+                            {archive.raportRows.map(r => {
+                              const avg = getRaportAverageForArchive(r);
+                              return (
+                                <div key={r.id} className="border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="font-black text-slate-800">{dbLocal.getRaportKelas().find(k => k.id === r.kelas_id)?.nama_kelas || 'Kelas'} - {r.semester}</p>
+                                    <p className="text-xs text-slate-400">{r.tahun_ajaran} - Status {r.status}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-black text-emerald-700">{avg.toFixed(2)}</p>
+                                    <p className="text-xs font-black text-slate-500">Predikat {getRaportPredikat(avg)}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {archive.raportRows.length === 0 && <p className="text-center text-slate-400 text-xs py-12">Belum ada data raport.</p>}
+                          </div>
+                        )}
+
+                        {alumniDetailTab === 'hafalan' && (
+                          <div className="space-y-2">
+                            {archive.santriHapalan.map(h => (
+                              <div key={h.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between gap-3 text-xs">
+                                <div><p className="font-black text-slate-800">{h.surah_nama}</p><p className="text-slate-400">{h.tanggal} - {h.jenis} - {h.ayat_dari}-{h.ayat_sampai}</p></div>
+                                <span className="font-black text-blue-700">{h.nilai.replace(/_/g, ' ')}</span>
+                              </div>
+                            ))}
+                            {archive.santriHapalan.length === 0 && <p className="text-center text-slate-400 text-xs py-12">Belum ada catatan hafalan.</p>}
+                          </div>
+                        )}
+
+                        {alumniDetailTab === 'pelanggaran' && (
+                          <div className="space-y-2">
+                            {archive.santriViolations.map(v => (
+                              <div key={v.id} className="bg-red-50/40 border border-red-100 rounded-2xl p-4 flex justify-between gap-3 text-xs">
+                                <div><p className="font-black text-slate-800">{getJenisVName(v.jenis_id)}</p><p className="text-slate-500">{v.tanggal} - {v.deskripsi}</p></div>
+                                <span className="font-black text-red-700">{v.poin} poin</span>
+                              </div>
+                            ))}
+                            {archive.santriViolations.length === 0 && <p className="text-center text-slate-400 text-xs py-12">Tidak ada catatan pelanggaran.</p>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="h-full min-h-[520px] flex items-center justify-center text-center p-10">
+                    <div>
+                      <GraduationCap className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <p className="font-black text-slate-700">Pilih alumni untuk membuka arsip lengkap.</p>
+                      <p className="text-xs text-slate-400 mt-1">Biodata, pembayaran, raport, hafalan, dan pelanggaran akan tampil di sini.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -3745,7 +4203,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     required
                   >
                     <option value="">-- Pilih Santri Penerima --</option>
-                    {santriList.map(s => (
+                    {santriList.filter(s => s.status === 'aktif').map(s => (
                       <option key={s.id} value={s.id}>
                         {s.nama} ({s.nis} - Kelas {s.kelas})
                       </option>
@@ -3775,11 +4233,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
               let currentEligibleCount = 0;
               if (targetScope === 'santri') {
-                currentEligibleCount = targetSantriId ? 1 : 0;
+                currentEligibleCount = targetSantriId && santriList.find(s => s.id === targetSantriId)?.status === 'aktif' ? 1 : 0;
               } else {
                 currentEligibleCount = bypassEntranceFilter 
-                  ? santriList.length 
+                  ? santriList.filter(s => s.status === 'aktif').length 
                   : santriList.filter(s => {
+                      if (s.status !== 'aktif') return false;
                       const joinYear = parseYearLocal(s.tahun_masuk);
                       const joinMonthIdx = monthNamesLocal.findIndex(m => m.toLowerCase() === (s.bulan_masuk || 'Januari').toLowerCase());
                       
@@ -3797,13 +4256,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     <span className="font-extrabold text-green-700 font-mono">
                       {targetScope === 'santri' 
                         ? `${currentEligibleCount} Santri Terpilih`
-                        : `${currentEligibleCount} dari ${santriList.length} Santri Aktif`
+                        : `${currentEligibleCount} dari ${santriList.filter(s => s.status === 'aktif').length} Santri Aktif`
                       }
                     </span>
                   </div>
-                  {targetScope === 'semua' && santriList.length - currentEligibleCount > 0 && (
+                  {targetScope === 'semua' && santriList.filter(s => s.status === 'aktif').length - currentEligibleCount > 0 && (
                     <p className="text-[10px] text-amber-600 leading-normal font-medium">
-                      ⚠️ ({santriList.length - currentEligibleCount} santri dilewati otomatis karena belum masuk/terdaftar pada periode {selBulan} {selTahun}).
+                      ⚠️ ({santriList.filter(s => s.status === 'aktif').length - currentEligibleCount} santri aktif dilewati otomatis karena belum masuk/terdaftar pada periode {selBulan} {selTahun}).
                     </p>
                   )}
                   {targetScope === 'santri' && !targetSantriId && (
@@ -3821,7 +4280,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                         className="mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500"
                       />
                       <span className="text-[10px] text-gray-500 font-semibold leading-tight font-sans">
-                        Abaikan filter bulan masuk (Kirim tagihan ke seluruh santri tanpa pengecualian)
+                        Abaikan filter bulan masuk (tetap hanya mengirim tagihan ke santri aktif)
                       </span>
                     </label>
                   )}
@@ -5772,6 +6231,20 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   required
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Status Santri:</label>
+              <select
+                value={pStatus}
+                onChange={(e) => setPStatus(e.target.value as Santri['status'])}
+                className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-black focus:ring-1 focus:ring-green-500"
+              >
+                <option value="aktif">Aktif</option>
+                <option value="alumni">Alumni</option>
+                <option value="keluar">Keluar</option>
+              </select>
+              <span className="text-[9px] text-gray-400 leading-none mt-1 block">Tagihan baru hanya dibuat untuk santri berstatus aktif.</span>
             </div>
 
             </div>{/* end scrollable area */}
