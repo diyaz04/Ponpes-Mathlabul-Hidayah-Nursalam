@@ -193,6 +193,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [pBulanMasuk, setPBulanMasuk] = useState('Januari');
   const [pTahunMasuk, setPTahunMasuk] = useState('2026');
   const [pStatus, setPStatus] = useState<Santri['status']>('aktif');
+  const [pFotoUrl, setPFotoUrl] = useState('');
 
   // Forms: Bulking Invoices Create
   const [selJenisId, setSelJenisId] = useState('');
@@ -341,6 +342,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   } | null>(null);
 
   const [isPrintingAll, setIsPrintingAll] = useState(false);
+  const [isPrintingCards, setIsPrintingCards] = useState(false);
   const [pdfChoiceModal, setPdfChoiceModal] = useState<{
     isOpen: boolean;
     santri: Santri;
@@ -639,6 +641,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setPBulanMasuk(s.bulan_masuk || 'Januari');
       setPTahunMasuk(s.tahun_masuk || '2026');
       setPStatus(s.status || 'aktif');
+      setPFotoUrl(s.foto_url || '');
     } else {
       setPupilId('');
       setPNis('');
@@ -652,6 +655,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setPBulanMasuk('Januari');
       setPTahunMasuk('2026');
       setPStatus('aktif');
+      setPFotoUrl('');
     }
     setShowPupilModal(true);
   };
@@ -1050,6 +1054,131 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.save(`Biodata_${santri.nis}_${safeName}.pdf`);
   };
 
+  const getQrDataUrl = async (text: string) => {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(text)}&bgcolor=ffffff&color=065f46&margin=2`;
+    return loadImageAsDataUrl(qrUrl);
+  };
+
+  const drawSantriCard = async (doc: jsPDF, santri: Santri, x: number, y: number) => {
+    const cardW = 85.6;
+    const cardH = 54;
+    const logoData = await loadImageAsDataUrl(MATHLABUL_HIDAYAH_LOGO_URL);
+    const photoData = santri.foto_url ? await loadImageAsDataUrl(santri.foto_url) : null;
+    const qrData = await getQrDataUrl(santri.nis);
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, cardW, cardH, 3, 3, 'F');
+    doc.setDrawColor(16, 185, 129);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(x, y, cardW, cardH, 3, 3, 'S');
+
+    doc.setFillColor(5, 95, 70);
+    doc.roundedRect(x, y, cardW, 16, 3, 3, 'F');
+    doc.setFillColor(245, 158, 11);
+    doc.rect(x, y + 15.4, cardW, 1.2, 'F');
+
+    if (logoData) {
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(x + 3.5, y + 2.5, 11, 11, 2, 2, 'F');
+      doc.addImage(logoData, 'PNG', x + 4.4, y + 3.3, 9.2, 9.2);
+    }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.2);
+    doc.text('KARTU TANDA SANTRI', x + 16.5, y + 5.3);
+    doc.setFontSize(5.3);
+    doc.text('PONDOK PESANTREN MATHLABUL HIDAYAH', x + 16.5, y + 9.2);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(4.2);
+    doc.text('Cigalontang - Kabupaten Tasikmalaya - Jawa Barat', x + 16.5, y + 12.7);
+
+    doc.setFillColor(240, 253, 244);
+    doc.roundedRect(x + 4, y + 20, 20, 25, 2, 2, 'F');
+    doc.setDrawColor(187, 247, 208);
+    doc.roundedRect(x + 4, y + 20, 20, 25, 2, 2, 'S');
+    if (photoData) {
+      doc.addImage(photoData, photoData.includes('image/png') ? 'PNG' : 'JPEG', x + 5.2, y + 21.2, 17.6, 22.6);
+    } else {
+      doc.setTextColor(148, 163, 184);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5);
+      doc.text('FOTO', x + 14, y + 34, { align: 'center' });
+    }
+
+    const infoX = x + 27;
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text(santri.nama.toUpperCase(), infoX, y + 23, { maxWidth: 36 });
+    doc.setFontSize(5.4);
+    doc.setTextColor(6, 95, 70);
+    doc.text(`NIS: ${santri.nis}`, infoX, y + 29);
+    doc.setTextColor(71, 85, 105);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Kelas: ${santri.kelas}`, infoX, y + 34);
+    doc.text(`Kamar: ${santri.kamar || '-'}`, infoX, y + 38.5);
+    doc.text(`Masuk: ${santri.bulan_masuk || ''} ${santri.tahun_masuk}`.trim(), infoX, y + 43);
+
+    if (qrData) {
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(x + 67.4, y + 21, 14.5, 14.5, 1.5, 1.5, 'F');
+      doc.addImage(qrData, 'PNG', x + 68, y + 21.6, 13.3, 13.3);
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(3.8);
+    doc.setTextColor(6, 95, 70);
+    doc.text('QR NIS', x + 74.7, y + 38, { align: 'center' });
+
+    doc.setFillColor(236, 253, 245);
+    doc.roundedRect(x + 27, y + 46.5, 54.5, 4.8, 1.6, 1.6, 'F');
+    doc.setFontSize(4);
+    doc.setTextColor(5, 95, 70);
+    doc.text('Kartu ini berlaku selama santri tercatat aktif di pesantren.', x + 54.2, y + 49.7, { align: 'center' });
+  };
+
+  const downloadSantriCardPDF = async (santri: Santri) => {
+    setActionDoneMsg(`Menyiapkan kartu santri ${santri.nama}...`);
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [85.6, 54] });
+    await drawSantriCard(doc, santri, 0, 0);
+    doc.save(`Kartu_Santri_${santri.nis}_${santri.nama.replace(/\s+/g, '_')}.pdf`);
+    setActionDoneMsg(`✅ Kartu santri ${santri.nama} berhasil diunduh.`);
+    setTimeout(() => setActionDoneMsg(null), 4000);
+  };
+
+  const downloadAllSantriCardsPDF = async () => {
+    const activeSantri = santriList.filter((s) => s.status === 'aktif');
+    if (activeSantri.length === 0) {
+      setActionDoneMsg('Tidak ada santri aktif untuk dicetak kartunya.');
+      setTimeout(() => setActionDoneMsg(null), 4000);
+      return;
+    }
+
+    setIsPrintingCards(true);
+    setActionDoneMsg(`Menyiapkan 0 / ${activeSantri.length} kartu santri...`);
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const startX = 14;
+    const startY = 14;
+    const gapX = 8;
+    const gapY = 7;
+    const cardW = 85.6;
+    const cardH = 54;
+
+    for (let i = 0; i < activeSantri.length; i++) {
+      if (i > 0 && i % 8 === 0) doc.addPage();
+      const pageIndex = i % 8;
+      const col = pageIndex % 2;
+      const row = Math.floor(pageIndex / 2);
+      await drawSantriCard(doc, activeSantri[i], startX + col * (cardW + gapX), startY + row * (cardH + gapY));
+      setActionDoneMsg(`Menyiapkan ${i + 1} / ${activeSantri.length} kartu santri...`);
+    }
+
+    doc.save(`Kartu_Santri_Aktif_${new Date().toISOString().slice(0, 10)}.pdf`);
+    setIsPrintingCards(false);
+    setActionDoneMsg(`✅ ${activeSantri.length} kartu santri berhasil diunduh dalam satu PDF.`);
+    setTimeout(() => setActionDoneMsg(null), 5000);
+  };
+
   const handleSavePupil = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalWaliId = pWaliId;
@@ -1083,6 +1212,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               jenis_kelamin: pJK,
             tanggal_lahir: pBirth,
             alamat: pAlamat,
+              foto_url: pFotoUrl || null,
               status: pStatus,
               tahun_masuk: pTahunMasuk,
               bulan_masuk: pBulanMasuk
@@ -1126,6 +1256,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             jenis_kelamin: pJK,
             tanggal_lahir: pBirth,
             alamat: pAlamat || null,
+            foto_url: pFotoUrl || null,
             wali_id: finalWaliId === '__buat_baru__' ? null : finalWaliId,
             status: pStatus,
             bulan_masuk: pBulanMasuk,
@@ -1143,6 +1274,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           jenis_kelamin: pJK,
           tanggal_lahir: pBirth,
           alamat: pAlamat || null,
+          foto_url: pFotoUrl || null,
           wali_id: finalWaliId,
           status: pStatus,
           tahun_masuk: pTahunMasuk,
@@ -3148,6 +3280,24 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     setPsbAdminNote(row.catatan_admin || '');
   };
 
+  const handleDeletePsbPendaftar = (row: PSBPendaftar) => {
+    triggerConfirm(
+      'Hapus Data Pendaftar PSB',
+      `Yakin mau menghapus data pendaftar "${row.nama_lengkap}" (${row.nomor_pendaftaran})? Data ini akan hilang permanen dari daftar PSB.`,
+      async () => {
+        try {
+          await dbLocal.deletePSBPendaftar(row.id);
+          setPsbPendaftarList((prev) => prev.filter((item) => item.id !== row.id));
+          setPsbDetail(null);
+          setActionDoneMsg(`✅ Data pendaftar ${row.nama_lengkap} berhasil dihapus.`);
+        } catch (err: any) {
+          setActionDoneMsg(`❌ Gagal menghapus pendaftar: ${err.message || err}`);
+        }
+        setTimeout(() => setActionDoneMsg(null), 4000);
+      }
+    );
+  };
+
   const exportPsbExcel = () => {
     const rows = filteredPsbPendaftar.map((row, index) => ({
       No: index + 1,
@@ -3319,6 +3469,14 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 <Printer className="w-4 h-4" />
                 {isPrintingAll ? 'Mencetak...' : 'Cetak Semua PDF'}
               </button>
+              <button
+                onClick={downloadAllSantriCardsPDF}
+                disabled={isPrintingCards}
+                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-300 text-white font-bold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+              >
+                <CreditCard className="w-4 h-4" />
+                {isPrintingCards ? 'Menyiapkan Kartu...' : 'Download Semua Kartu'}
+              </button>
             </div>
           </div>
 
@@ -3448,7 +3606,18 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 {santriList.filter(s => s.status === 'aktif' && (s.nama.toLowerCase().includes(searchSantri.toLowerCase()) || s.kelas.toLowerCase().includes(searchSantri.toLowerCase()))).map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-gray-500">{s.nis}</td>
-                    <td className="px-4 py-3 font-extrabold text-slate-800">{s.nama}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-400 shrink-0">
+                          {s.foto_url ? (
+                            <img src={s.foto_url} alt={s.nama} className="w-full h-full object-cover" />
+                          ) : (
+                            s.nama.charAt(0)
+                          )}
+                        </div>
+                        <span className="font-extrabold text-slate-800">{s.nama}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <span>{s.kelas}</span>
                       <span className="text-[10px] text-gray-400 block font-normal">Kamar {s.kamar || 'Belum Ditunjuk'}</span>
@@ -3466,6 +3635,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                         className="p-1 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg cursor-pointer inline-flex items-center gap-1 font-bold text-[10px]"
                       >
                         <Printer className="w-3.5 h-3.5" /> PDF
+                      </button>
+                      <button
+                        onClick={() => downloadSantriCardPDF(s)}
+                        title="Download kartu santri ukuran KTP"
+                        className="p-1 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg cursor-pointer inline-flex items-center gap-1 font-bold text-[10px]"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" /> Kartu
                       </button>
                       <button 
                         onClick={() => handleOpenPupilModal(s)}
@@ -4568,7 +4744,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               <div className="lg:col-span-2 rounded-2xl bg-slate-50 border border-slate-150 p-4"><p className="text-[10px] font-black uppercase text-slate-400">Catatan Pendaftar</p><p className="text-sm font-semibold text-slate-700 mt-1">{psbDetail.catatan || '-'}</p></div>
               <div className="lg:col-span-2"><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Catatan Admin / Verifikasi:</label><textarea rows={3} value={psbAdminNote} onChange={(e) => setPsbAdminNote(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:border-green-500" /></div>
             </div>
-            <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-3"><button type="button" onClick={() => handleUpdatePsbStatus(psbDetail, 'ditolak')} className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black cursor-pointer">Tolak Pendaftar</button><button type="button" onClick={() => handleUpdatePsbStatus(psbDetail, 'terverifikasi')} className="px-5 py-3 rounded-xl bg-green-700 hover:bg-green-800 text-white text-xs font-black cursor-pointer">Verifikasi Pendaftar</button></div>
+            <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-3">
+              <button type="button" onClick={() => handleDeletePsbPendaftar(psbDetail)} className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-red-50 text-red-700 border border-red-100 text-xs font-black cursor-pointer">Hapus Data</button>
+              <button type="button" onClick={() => handleUpdatePsbStatus(psbDetail, 'ditolak')} className="px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black cursor-pointer">Tolak Pendaftar</button>
+              <button type="button" onClick={() => handleUpdatePsbStatus(psbDetail, 'terverifikasi')} className="px-5 py-3 rounded-xl bg-green-700 hover:bg-green-800 text-white text-xs font-black cursor-pointer">Verifikasi Pendaftar</button>
+            </div>
           </div>
         </div>
       )}
@@ -6973,6 +7153,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   required
                 />
               </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-150 rounded-2xl p-3">
+              <ImageUploader
+                label="Foto Santri untuk Kartu (otomatis dikompres & upload Cloudinary)"
+                currentImageUrl={pFotoUrl}
+                onUploadSuccess={(url) => setPFotoUrl(url)}
+                onClear={() => setPFotoUrl('')}
+                maxSizeMB={8}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">

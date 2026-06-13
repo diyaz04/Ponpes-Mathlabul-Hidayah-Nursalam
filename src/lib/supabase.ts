@@ -413,6 +413,15 @@ export const dbLocal = {
     await refreshSupabaseCache().catch(() => undefined);
     return data;
   },
+  deletePSBPendaftar: async (id: string): Promise<void> => {
+    const { error } = await supabase
+      .from('psb_pendaftar')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    cache.psb_pendaftar = cache.psb_pendaftar.filter((row) => row.id !== id);
+    await refreshSupabaseCache().catch(() => undefined);
+  },
   confirmPayment: (pembayaranId: string, method?: string) => {
     supabase
       .from('pembayaran')
