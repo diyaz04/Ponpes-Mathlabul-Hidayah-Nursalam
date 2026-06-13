@@ -221,6 +221,9 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [cfgTagihanJenisFilter, setCfgTagihanJenisFilter] = useState('semua');
   const [cfgPaymentSearch, setCfgPaymentSearch] = useState('');
   const [rekapSubTab, setRekapSubTab] = useState<'riwayat' | 'tagihan_tersebar'>('riwayat');
+  const [rekapRiwayatTab, setRekapRiwayatTab] = useState<'laporan' | 'kategori' | 'spp' | 'transaksi'>('laporan');
+  const [rekapCategorySearch, setRekapCategorySearch] = useState('');
+  const [sppRekapSearch, setSppRekapSearch] = useState('');
   const [cancelTargetId, setCancelTargetId] = useState('');
   const [cashInstallmentModal, setCashInstallmentModal] = useState<{
     isOpen: boolean;
@@ -4708,8 +4711,34 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           {/* Conditional page render 1: Riwayat Log Pembayaran Masuk (Uang Masuk) */}
           {rekapSubTab === 'riwayat' && (
             <div className="space-y-6 animate-fade-in">
+              <div className="bg-white rounded-3xl p-2 border border-gray-150 flex flex-col xl:flex-row gap-2 select-none">
+                {[
+                  { id: 'laporan', label: 'Cetak Laporan', icon: FileText },
+                  { id: 'kategori', label: 'Kategori Masuk', icon: Activity },
+                  { id: 'spp', label: 'SPP Per Santri', icon: CheckCircle2 },
+                  { id: 'transaksi', label: 'Log Transaksi', icon: Search }
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  const active = rekapRiwayatTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setRekapRiwayatTab(tab.id as any)}
+                      className={`flex-1 px-4 py-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                        active
+                          ? 'bg-emerald-700 text-white shadow-sm'
+                          : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" /> {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
               
               {/* Card: Export PDF Laporan Professional */}
+          {rekapRiwayatTab === 'laporan' && (
           <div className="bg-white rounded-3xl p-6 border border-gray-150">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-gray-100 pb-4 select-none">
               <div className="text-left">
@@ -4855,10 +4884,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
             </div>
           </div>
+          )}
 
           {/* Dashboard Keuangan Per Kategori */}
-          {(() => {
-            const categorySummary = getFinancialCategorySummary();
+          {rekapRiwayatTab === 'kategori' && (() => {
+            const rawCategorySummary = getFinancialCategorySummary();
+            const categoryQuery = rekapCategorySearch.toLowerCase().trim();
+            const categorySummary = rawCategorySummary.filter(item => {
+              if (!categoryQuery) return true;
+              return item.nama.toLowerCase().includes(categoryQuery);
+            });
             const reportPayments = getReportPayments();
             const totalMasuk = categorySummary.reduce((sum, item) => sum + item.total, 0);
             const topCategory = categorySummary[0];
@@ -4878,6 +4913,17 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                       <Activity className="w-4 h-4 text-emerald-700" /> Dashboard Keuangan Per Kategori
                     </h4>
                     <p className="text-[11px] text-gray-400 mt-0.5">Pantau uang masuk berdasarkan kategori iuran yang dibuat admin, mengikuti filter tanggal/bulan di atas.</p>
+                  </div>
+
+                  <div className="relative w-full lg:w-72">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-405" />
+                    <input
+                      type="text"
+                      value={rekapCategorySearch}
+                      onChange={(e) => setRekapCategorySearch(e.target.value)}
+                      placeholder="Cari kategori iuran..."
+                      className="w-full bg-slate-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:ring-1 focus:ring-green-500 font-semibold text-gray-800"
+                    />
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 w-full lg:w-auto">
@@ -4957,12 +5003,17 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           })()}
 
           {/* Rekap SPP Syahriah Per Santri */}
-          {(() => {
+          {rekapRiwayatTab === 'spp' && (() => {
             const sppJenisIds = getSppSyahriahJenisIds();
             const sppBillsForYear = bills.filter(b => sppJenisIds.includes(b.jenis_id) && b.tahun === sppRekapTahun);
             const santriIdsWithSpp = new Set(sppBillsForYear.map(b => b.santri_id));
+            const sppQuery = sppRekapSearch.toLowerCase().trim();
             const rows = santriList
               .filter(s => s.status === 'aktif' || santriIdsWithSpp.has(s.id))
+              .filter(s => {
+                if (!sppQuery) return true;
+                return s.nama.toLowerCase().includes(sppQuery) || s.nis.toLowerCase().includes(sppQuery) || s.kelas.toLowerCase().includes(sppQuery);
+              })
               .slice()
               .sort((a, b) => a.nama.localeCompare(b.nama));
             const paidCount = rows.reduce((sum, santri) => {
@@ -4979,6 +5030,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     <p className="text-[11px] text-gray-400 mt-0.5">Centang muncul saat tagihan SPP Syahriah pada bulan tersebut sudah lunas.</p>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-3 top-3 w-4 h-4 text-gray-405" />
+                      <input
+                        type="text"
+                        value={sppRekapSearch}
+                        onChange={(e) => setSppRekapSearch(e.target.value)}
+                        placeholder="Cari santri / NIS / kelas..."
+                        className="w-full bg-slate-50 border border-slate-150 rounded-2xl pl-9 pr-3 py-3 text-xs font-semibold focus:ring-1 focus:ring-green-500"
+                      />
+                    </div>
                     <div className="bg-slate-50 border border-slate-150 rounded-2xl px-4 py-2">
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Tahun Rekap</span>
                       <input
@@ -5073,6 +5134,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           })()}
 
           {/* Card: Riwayat Log Pembayaran Masuk (Kas Masuk) */}
+          {rekapRiwayatTab === 'transaksi' && (
           <div className="bg-white rounded-3xl p-6 border border-gray-150 space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4 select-none">
               <div className="text-left">
@@ -5206,6 +5268,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               </table>
             </div>
           </div>
+          )}
           </div>
           )}
 
