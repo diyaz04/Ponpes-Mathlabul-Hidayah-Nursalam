@@ -73,6 +73,36 @@ const DEFAULT_SECTION_TITLES_JSON = JSON.stringify({
   faq: { eyebrow: 'Informasi Umum', title: 'Pertanyaan Yang Sering Diajukan (FAQ)', desc: 'Pertanyaan utama orang tua wali saat mendaftarkan putra-putrinya.' }
 }, null, 2);
 
+const CMS_ROUTINE_TABS = [
+  { id: 'shubuh', label: 'Subuh' },
+  { id: 'madrasah', label: 'Madrasah' },
+  { id: 'tahfidz', label: 'Tahfidz' },
+  { id: 'malam', label: 'Malam' }
+];
+const CMS_SECTION_KEYS = [
+  { id: 'program', label: 'Program' },
+  { id: 'routine', label: 'Agenda Harian' },
+  { id: 'facilities', label: 'Fasilitas' },
+  { id: 'testimonials', label: 'Testimoni' },
+  { id: 'psb', label: 'PSB' },
+  { id: 'berita', label: 'Berita' },
+  { id: 'faq', label: 'FAQ' }
+];
+const CMS_ICON_OPTIONS = ['BookOpen', 'Sparkles', 'ShieldCheck', 'GraduationCap', 'Activity'];
+const CMS_TONE_OPTIONS = ['green', 'indigo', 'amber', 'rose'];
+const CMS_SOCIAL_OPTIONS = ['instagram', 'facebook', 'youtube', 'tiktok', 'whatsapp', 'telegram', 'website'];
+
+const parseCmsJson = <T,>(value: string, fallback: T): T => {
+  try {
+    const parsed = JSON.parse(value || '');
+    return parsed ?? fallback;
+  } catch (_err) {
+    return fallback;
+  }
+};
+
+const stringifyCms = (value: unknown) => JSON.stringify(value, null, 2);
+
 const createClientUuid = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -2918,6 +2948,98 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     }
   };
 
+  const cmsPrograms = parseCmsJson<any[]>(programsJson, []);
+  const cmsFacilities = parseCmsJson<any[]>(facilitiesJson, []);
+  const cmsFaqs = parseCmsJson<any[]>(faqJson, []);
+  const cmsTestimonials = parseCmsJson<any[]>(testimonialsJson, []);
+  const cmsSocialLinks = parseCmsJson<any[]>(socialLinksJson, []);
+  const cmsRoutines = parseCmsJson<Record<string, any>>(routinesJson, {});
+  const cmsSectionTitles = parseCmsJson<Record<string, any>>(
+    sectionTitlesJson,
+    parseCmsJson<Record<string, any>>(DEFAULT_SECTION_TITLES_JSON, {})
+  );
+
+  const updateProgramsForm = (updater: (items: any[]) => any[]) => {
+    setProgramsJson(stringifyCms(updater(parseCmsJson<any[]>(programsJson, []))));
+  };
+
+  const updateFacilitiesForm = (updater: (items: any[]) => any[]) => {
+    setFacilitiesJson(stringifyCms(updater(parseCmsJson<any[]>(facilitiesJson, []))));
+  };
+
+  const updateFaqForm = (updater: (items: any[]) => any[]) => {
+    setFaqJson(stringifyCms(updater(parseCmsJson<any[]>(faqJson, []))));
+  };
+
+  const updateTestimonialsForm = (updater: (items: any[]) => any[]) => {
+    setTestimonialsJson(stringifyCms(updater(parseCmsJson<any[]>(testimonialsJson, []))));
+  };
+
+  const updateSocialLinksForm = (updater: (items: any[]) => any[]) => {
+    setSocialLinksJson(stringifyCms(updater(parseCmsJson<any[]>(socialLinksJson, []))));
+  };
+
+  const updateSectionTitlesForm = (updater: (items: Record<string, any>) => Record<string, any>) => {
+    setSectionTitlesJson(stringifyCms(updater(parseCmsJson<Record<string, any>>(sectionTitlesJson, cmsSectionTitles))));
+  };
+
+  const updateRoutinesForm = (updater: (items: Record<string, any>) => Record<string, any>) => {
+    setRoutinesJson(stringifyCms(updater(parseCmsJson<Record<string, any>>(routinesJson, {}))));
+  };
+
+  const updateRoutineField = (tabId: string, field: 'title' | 'description', value: string) => {
+    updateRoutinesForm((data) => ({
+      ...data,
+      [tabId]: {
+        ...(data[tabId] || {}),
+        items: data[tabId]?.items || [],
+        [field]: value
+      }
+    }));
+  };
+
+  const updateRoutineItemField = (tabId: string, index: number, field: 'time' | 'activity', value: string) => {
+    updateRoutinesForm((data) => {
+      const routine = data[tabId] || { title: '', description: '', items: [] };
+      const items = Array.isArray(routine.items) ? routine.items : [];
+      return {
+        ...data,
+        [tabId]: {
+          ...routine,
+          items: items.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, [field]: value } : item)
+        }
+      };
+    });
+  };
+
+  const addRoutineItem = (tabId: string) => {
+    updateRoutinesForm((data) => {
+      const routine = data[tabId] || { title: '', description: '', items: [] };
+      const items = Array.isArray(routine.items) ? routine.items : [];
+      return {
+        ...data,
+        [tabId]: {
+          ...routine,
+          items: [...items, { time: '', activity: '' }]
+        }
+      };
+    });
+  };
+
+  const removeRoutineItem = (tabId: string, index: number) => {
+    updateRoutinesForm((data) => {
+      const routine = data[tabId] || { title: '', description: '', items: [] };
+      const items = Array.isArray(routine.items) ? routine.items : [];
+      return {
+        ...data,
+        [tabId]: {
+          ...routine,
+          items: items.filter((_item: any, itemIndex: number) => itemIndex !== index)
+        }
+      };
+    });
+  };
+
   return (
     <div className={`p-4 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto flex-1 ${isPending ? 'opacity-50' : ''}`}>
       
@@ -5736,13 +5858,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 </div>
               </div>
 
-              {/* SECTION 3: ADVANCED STRINGIFIED JSON ITEMS (Routines, Facilities, Testimonials) */}
-              <div className="p-4 bg-amber-50/50 hover:bg-amber-50 rounded-2xl border border-amber-100 space-y-4">
+              {/* SECTION 3: VISUAL EDITORS FOR STRUCTURED LANDING CONTENT */}
+              <div className="p-4 bg-amber-50/50 hover:bg-amber-50 rounded-2xl border border-amber-100 space-y-5">
                 <div className="flex justify-between items-center border-b border-amber-200/50 pb-2">
                   <h5 className="font-bold text-xs uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-700" /> Kustomisasi Lanjutan Konten List (Format JSON Data)
+                    <AlertTriangle className="w-4 h-4 text-amber-700" /> Form Kustomisasi Konten Landing Page
                   </h5>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       try {
@@ -5755,84 +5877,239 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                           setFaqJson(p.faq_json || DEFAULT_FAQ_JSON);
                           setSectionTitlesJson(p.section_titles_json || DEFAULT_SECTION_TITLES_JSON);
                           setSocialLinksJson(p.social_links_json || DEFAULT_SOCIAL_LINKS_JSON);
-                          alert('Berhasil reset format JSON ke default profil saat ini.');
+                          alert('Berhasil reset form konten ke profil saat ini.');
                         }
                       } catch (err) {}
                     }}
                     className="text-[10px] font-black text-amber-800 underline uppercase cursor-pointer"
                   >
-                    Reset Default JSON
+                    Reset Konten
                   </button>
                 </div>
-                
+
                 <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
-                  *Catatan: Kolom-kolom di bawah menyimpan data layout list kompleks dlm format JSON. Harap pastikan keabsahan struktur kurung siku dan tanda kutip ganda agar tidak merusak tata letak landing page.
+                  Semua bagian di bawah tampil sebagai form biasa. Sistem tetap menyimpan struktur datanya otomatis saat tombol simpan ditekan.
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Agenda Harian (Routines) JSON:</label>
-                    <textarea
-                      rows={4}
-                      value={routinesJson}
-                      onChange={(e) => setRoutinesJson(e.target.value)}
-                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
-                    />
+                <div className="space-y-5">
+                  <div className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-800">Judul & Subjudul Section</h6>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Hero utama tetap dari form profil</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {CMS_SECTION_KEYS.map((sectionKey) => {
+                        const section = cmsSectionTitles[sectionKey.id] || {};
+                        return (
+                          <div key={sectionKey.id} className="rounded-xl border border-slate-150 p-3 bg-slate-50 space-y-2">
+                            <p className="text-[10px] font-black text-green-800 uppercase">{sectionKey.label}</p>
+                            <input
+                              type="text"
+                              value={section.eyebrow || ''}
+                              onChange={(e) => updateSectionTitlesForm((data) => ({ ...data, [sectionKey.id]: { ...(data[sectionKey.id] || {}), eyebrow: e.target.value } }))}
+                              placeholder="Label kecil"
+                              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500"
+                            />
+                            <input
+                              type="text"
+                              value={section.title || ''}
+                              onChange={(e) => updateSectionTitlesForm((data) => ({ ...data, [sectionKey.id]: { ...(data[sectionKey.id] || {}), title: e.target.value } }))}
+                              placeholder="Judul section"
+                              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500"
+                            />
+                            <textarea
+                              rows={2}
+                              value={section.desc || ''}
+                              onChange={(e) => updateSectionTitlesForm((data) => ({ ...data, [sectionKey.id]: { ...(data[sectionKey.id] || {}), desc: e.target.value } }))}
+                              placeholder="Deskripsi singkat section"
+                              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Program Unggulan JSON:</label>
-                    <textarea
-                      rows={4}
-                      value={programsJson}
-                      onChange={(e) => setProgramsJson(e.target.value)}
-                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
-                    />
+
+                  <div className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-800">Program Unggulan</h6>
+                      <button
+                        type="button"
+                        onClick={() => updateProgramsForm((items) => [...items, { id: Date.now(), title: '', desc: '', icon: 'BookOpen', badge: '', tone: 'green' }])}
+                        className="px-3 py-2 rounded-xl bg-green-700 text-white text-[10px] font-black flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Tambah
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {cmsPrograms.map((program, index) => (
+                        <div key={program.id || index} className="rounded-xl border border-slate-150 p-3 bg-slate-50 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-black text-green-800 uppercase">Program {index + 1}</p>
+                            <button type="button" onClick={() => updateProgramsForm((items) => items.filter((_item, itemIndex) => itemIndex !== index))} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 cursor-pointer">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <input type="text" value={program.title || ''} onChange={(e) => updateProgramsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, title: e.target.value } : item))} placeholder="Nama program" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                          <textarea rows={2} value={program.desc || ''} onChange={(e) => updateProgramsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, desc: e.target.value } : item))} placeholder="Deskripsi program" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                          <div className="grid grid-cols-3 gap-2">
+                            <select value={program.icon || 'BookOpen'} onChange={(e) => updateProgramsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, icon: e.target.value } : item))} className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500">
+                              {CMS_ICON_OPTIONS.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
+                            </select>
+                            <select value={program.tone || 'green'} onChange={(e) => updateProgramsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, tone: e.target.value } : item))} className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500">
+                              {CMS_TONE_OPTIONS.map((tone) => <option key={tone} value={tone}>{tone}</option>)}
+                            </select>
+                            <input type="text" value={program.badge || ''} onChange={(e) => updateProgramsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, badge: e.target.value } : item))} placeholder="Badge" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Fasilitas Pesantren (Facilities) JSON:</label>
-                    <textarea
-                      rows={4}
-                      value={facilitiesJson}
-                      onChange={(e) => setFacilitiesJson(e.target.value)}
-                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
-                    />
+
+                  <div className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-800">Agenda Harian</h6>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Subuh, madrasah, tahfidz, malam</span>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {CMS_ROUTINE_TABS.map((tab) => {
+                        const routine = cmsRoutines[tab.id] || { title: '', description: '', items: [] };
+                        const routineItems = Array.isArray(routine.items) ? routine.items : [];
+                        return (
+                          <div key={tab.id} className="rounded-xl border border-slate-150 p-3 bg-slate-50 space-y-2">
+                            <p className="text-[10px] font-black text-green-800 uppercase">{tab.label}</p>
+                            <input type="text" value={routine.title || ''} onChange={(e) => updateRoutineField(tab.id, 'title', e.target.value)} placeholder="Judul agenda" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                            <textarea rows={2} value={routine.description || ''} onChange={(e) => updateRoutineField(tab.id, 'description', e.target.value)} placeholder="Deskripsi agenda" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                            <div className="space-y-2">
+                              {routineItems.map((item: any, index: number) => (
+                                <div key={index} className="grid grid-cols-[86px_1fr_32px] gap-2">
+                                  <input type="text" value={item.time || ''} onChange={(e) => updateRoutineItemField(tab.id, index, 'time', e.target.value)} placeholder="04.00" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-mono font-bold focus:outline-none focus:border-green-500" />
+                                  <input type="text" value={item.activity || ''} onChange={(e) => updateRoutineItemField(tab.id, index, 'activity', e.target.value)} placeholder="Aktivitas" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                                  <button type="button" onClick={() => removeRoutineItem(tab.id, index)} className="rounded-xl text-red-600 hover:bg-red-50 flex items-center justify-center cursor-pointer">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <button type="button" onClick={() => addRoutineItem(tab.id)} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black flex items-center gap-1 cursor-pointer">
+                              <Plus className="w-3.5 h-3.5" /> Tambah Jadwal
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">FAQ Landing Page JSON:</label>
-                    <textarea
-                      rows={4}
-                      value={faqJson}
-                      onChange={(e) => setFaqJson(e.target.value)}
-                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
-                    />
+
+                  <div className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-800">Fasilitas Pesantren</h6>
+                      <button type="button" onClick={() => updateFacilitiesForm((items) => [...items, { id: Date.now(), title: '', desc: '', icon: 'BookOpen', badge: '' }])} className="px-3 py-2 rounded-xl bg-green-700 text-white text-[10px] font-black flex items-center gap-1 cursor-pointer">
+                        <Plus className="w-3.5 h-3.5" /> Tambah
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {cmsFacilities.map((facility, index) => (
+                        <div key={facility.id || index} className="rounded-xl border border-slate-150 p-3 bg-slate-50 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-black text-green-800 uppercase">Fasilitas {index + 1}</p>
+                            <button type="button" onClick={() => updateFacilitiesForm((items) => items.filter((_item, itemIndex) => itemIndex !== index))} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 cursor-pointer">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <input type="text" value={facility.title || ''} onChange={(e) => updateFacilitiesForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, title: e.target.value } : item))} placeholder="Nama fasilitas" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                          <textarea rows={2} value={facility.desc || ''} onChange={(e) => updateFacilitiesForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, desc: e.target.value } : item))} placeholder="Deskripsi fasilitas" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                          <div className="grid grid-cols-2 gap-2">
+                            <select value={facility.icon || 'BookOpen'} onChange={(e) => updateFacilitiesForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, icon: e.target.value } : item))} className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500">
+                              {CMS_ICON_OPTIONS.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
+                            </select>
+                            <input type="text" value={facility.badge || ''} onChange={(e) => updateFacilitiesForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, badge: e.target.value } : item))} placeholder="Badge" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Komentar Wali (Testimonials) JSON:</label>
-                    <textarea
-                      rows={4}
-                      value={testimonialsJson}
-                      onChange={(e) => setTestimonialsJson(e.target.value)}
-                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
-                    />
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                    <div className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-800">FAQ Landing Page</h6>
+                        <button type="button" onClick={() => updateFaqForm((items) => [...items, { q: '', a: '' }])} className="px-3 py-2 rounded-xl bg-green-700 text-white text-[10px] font-black flex items-center gap-1 cursor-pointer">
+                          <Plus className="w-3.5 h-3.5" /> Tambah
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {cmsFaqs.map((faq, index) => (
+                          <div key={index} className="rounded-xl border border-slate-150 p-3 bg-slate-50 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-black text-green-800 uppercase">FAQ {index + 1}</p>
+                              <button type="button" onClick={() => updateFaqForm((items) => items.filter((_item, itemIndex) => itemIndex !== index))} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 cursor-pointer">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <input type="text" value={faq.q || ''} onChange={(e) => updateFaqForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, q: e.target.value } : item))} placeholder="Pertanyaan" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                            <textarea rows={2} value={faq.a || ''} onChange={(e) => updateFaqForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, a: e.target.value } : item))} placeholder="Jawaban" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-800">Link Media Sosial</h6>
+                        <button type="button" onClick={() => updateSocialLinksForm((items) => [...items, { platform: 'instagram', label: 'Instagram', url: '' }])} className="px-3 py-2 rounded-xl bg-green-700 text-white text-[10px] font-black flex items-center gap-1 cursor-pointer">
+                          <Plus className="w-3.5 h-3.5" /> Tambah
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {cmsSocialLinks.map((social, index) => (
+                          <div key={index} className="rounded-xl border border-slate-150 p-3 bg-slate-50 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-black text-green-800 uppercase">Medsos {index + 1}</p>
+                              <button type="button" onClick={() => updateSocialLinksForm((items) => items.filter((_item, itemIndex) => itemIndex !== index))} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 cursor-pointer">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <select value={social.platform || 'instagram'} onChange={(e) => updateSocialLinksForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, platform: e.target.value } : item))} className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500">
+                                {CMS_SOCIAL_OPTIONS.map((platform) => <option key={platform} value={platform}>{platform}</option>)}
+                              </select>
+                              <input type="text" value={social.label || ''} onChange={(e) => updateSocialLinksForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, label: e.target.value } : item))} placeholder="Label" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                            </div>
+                            <input type="url" value={social.url || ''} onChange={(e) => updateSocialLinksForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, url: e.target.value } : item))} placeholder="https://..." className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Judul/Subjudul Semua Section JSON:</label>
-                    <textarea
-                      rows={4}
-                      value={sectionTitlesJson}
-                      onChange={(e) => setSectionTitlesJson(e.target.value)}
-                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Link Media Sosial JSON:</label>
-                    <textarea
-                      rows={4}
-                      value={socialLinksJson}
-                      onChange={(e) => setSocialLinksJson(e.target.value)}
-                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
-                    />
-                    <p className="text-[9px] text-amber-700 mt-1">Isi url untuk menampilkan tombol logo medsos di footer.</p>
+
+                  <div className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h6 className="text-[11px] font-black uppercase tracking-wider text-slate-800">Testimoni Wali & Tokoh</h6>
+                      <button type="button" onClick={() => updateTestimonialsForm((items) => [...items, { id: Date.now(), name: '', city: '', avatar: '', rating: 5, words: '' }])} className="px-3 py-2 rounded-xl bg-green-700 text-white text-[10px] font-black flex items-center gap-1 cursor-pointer">
+                        <Plus className="w-3.5 h-3.5" /> Tambah
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {cmsTestimonials.map((testimoni, index) => (
+                        <div key={testimoni.id || index} className="rounded-xl border border-slate-150 p-3 bg-slate-50 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-black text-green-800 uppercase">Testimoni {index + 1}</p>
+                            <button type="button" onClick={() => updateTestimonialsForm((items) => items.filter((_item, itemIndex) => itemIndex !== index))} className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 cursor-pointer">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input type="text" value={testimoni.name || ''} onChange={(e) => updateTestimonialsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, name: e.target.value } : item))} placeholder="Nama" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                            <input type="text" value={testimoni.city || ''} onChange={(e) => updateTestimonialsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, city: e.target.value } : item))} placeholder="Keterangan" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                          </div>
+                          <div className="grid grid-cols-[1fr_90px] gap-2">
+                            <input type="url" value={testimoni.avatar || ''} onChange={(e) => updateTestimonialsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, avatar: e.target.value } : item))} placeholder="URL foto avatar" className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                            <input type="number" min="1" max="5" value={testimoni.rating || 5} onChange={(e) => updateTestimonialsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, rating: Number(e.target.value) || 5 } : item))} className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-[10px] font-bold focus:outline-none focus:border-green-500" />
+                          </div>
+                          <textarea rows={3} value={testimoni.words || ''} onChange={(e) => updateTestimonialsForm((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, words: e.target.value } : item))} placeholder="Isi testimoni" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-[10px] font-semibold focus:outline-none focus:border-green-500" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
