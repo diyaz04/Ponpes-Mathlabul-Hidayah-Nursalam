@@ -187,6 +187,12 @@ export interface ProfilPesantren {
   routines_json?: string;
   facilities_json?: string;
   testimonials_json?: string;
+  programs_json?: string;
+  faq_json?: string;
+  section_titles_json?: string;
+  social_links_json?: string;
+  footer_description?: string;
+  footer_copyright?: string;
 }
 
 export interface Program {

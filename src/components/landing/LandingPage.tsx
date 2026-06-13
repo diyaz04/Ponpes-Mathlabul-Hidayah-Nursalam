@@ -105,7 +105,7 @@ export function LandingPage({
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   // Active Facility Highlight State
-  const [activeFacility, setActiveFacility] = useState<number>(0);
+  const [activeFacility, setActiveFacility] = useState<number | string>(0);
 
   // PSB State
   const [psbNama, setPsbNama] = useState('');
@@ -253,6 +253,113 @@ export function LandingPage({
     }
   ];
 
+  const defaultPrograms = [
+    {
+      id: 1,
+      title: 'Tahfidz Quran Mutqin',
+      desc: 'Metode akselerasi talaqqi menyetor 1 halaman per hari bersertifikat sanad hafidz mutqin di bawah pengawasan asatidzah sanad Madinah.',
+      icon: 'BookOpen',
+      badge: 'Sabaq, Sabqi, Manzil',
+      tone: 'green'
+    },
+    {
+      id: 2,
+      title: 'Kajian Kitab Turots',
+      desc: 'Pendalaman keilmuan madzhab Syafiiyyah, aqidah Asyariyah, dan tasawuf bersanad menggunakan khazanah rujukan kitab kuning utama.',
+      icon: 'GraduationCap',
+      badge: 'Fathul Qorib, Talim Mutaallim',
+      tone: 'indigo'
+    },
+    {
+      id: 3,
+      title: 'Bilingual Immersion Camp',
+      desc: 'Penerapan bahasa Arab dan Inggris harian asrama secara aktif menggunakan asrama bahasa khusus dengan mutabaah mingguan.',
+      icon: 'ShieldCheck',
+      badge: 'Active Speaking & Debate',
+      tone: 'amber'
+    },
+    {
+      id: 4,
+      title: 'Pendidikan Formal MTs/MA',
+      desc: 'Lembaga Madrasah Tsanawiyyah dan Madrasah Aliyah berakreditasi A, membina ilmu umum eksakta modern penunjang studi lanjut.',
+      icon: 'Activity',
+      badge: 'Kurikulum Kementerian Agama',
+      tone: 'rose'
+    }
+  ];
+
+  const defaultFaqs = [
+    {
+      q: 'Bagaimana wali santri memantau perkembangan hafalan Al-Quran?',
+      a: 'Setiap kali santri menyetor hafalan kepada Ustadz pengampu di halaqah subuh/ashar, data setoran langsung diinput ke sistem. Wali santri dapat melihat rekam jejak lengkap hafalan melalui akun Portal Wali masing-masing.'
+    },
+    {
+      q: 'Apakah biaya SPP dan uang pendaftaran dapat dibayar cicil?',
+      a: 'Ya, Mathlabul Hidayah menyediakan skema kuitansi digital transparan. Pembayaran dapat dikonfirmasi lewat upload tanda bukti transfer di Portal Wali.'
+    },
+    {
+      q: 'Bagaimana prosedur penanganan pelanggaran santri?',
+      a: 'Pesantren menggunakan sistem poin kedisiplinan yang berimbang. Laporan pelanggaran langsung tersinkronisasi ke dashboard wali santri sebagai media evaluasi bersama.'
+    },
+    {
+      q: 'Apakah calon santri baru wajib memiliki hafalan Al-Quran sebelum mendaftar?',
+      a: 'Tidak wajib. Kami memiliki program kelas persiapan selama 3 bulan pertama untuk memantapkan bacaan sesuai tajwid sebelum santri memulai menghafal Al-Quran.'
+    }
+  ];
+
+  const defaultSectionTitles = {
+    program: {
+      eyebrow: 'Kurikulum Khusus Terarah',
+      title: '4 Pilar Kurikulum Unggulan Ponpes',
+      desc: 'Dirancang seimbang guna membidani kesiapan santri berkhidmah kepada masyarakat dan melanjutkan ke universitas ternama'
+    },
+    routine: {
+      eyebrow: 'Agenda Harian',
+      title: 'Bagaimana Keseharian Santri Mukim?',
+      desc: 'Kami mengedepankan pembiasaan disiplin positif dan keseimbangan asupan ilmu, jasmani, gizi, dan waktu istirahat yang proporsional.'
+    },
+    facilities: {
+      eyebrow: 'Fasilitas Pesantren',
+      title: 'Sarana Penunjang Terbaik Hafizh',
+      desc: 'Kami menginvestasikan sarana infrastruktur modern demi menjamin asrama yang sehat, aman, dan nyaman selama santri menempuh pendidikan.'
+    },
+    testimonials: {
+      eyebrow: 'Testimoni Wali & Tokoh',
+      title: 'Apa Kata Mereka Tentang Kami?',
+      desc: 'Kami bangga mengutamakan kepuasan, kejujuran, dan sinergi bimbingan harian tervalidasi.'
+    },
+    psb: {
+      eyebrow: 'PENERIMAAN SANTRI BARU T.A 2026/2027',
+      title: 'Formulir Pendaftaran Online',
+      desc: 'Pendaftaran kelas MTs (SMP) dan MA (SMA) terakreditasi resmi Pemerintah'
+    },
+    berita: {
+      eyebrow: 'Rilis Kegiatan',
+      title: 'Kajian & Warta Ponpes Terbaru',
+      desc: 'Informasi autentik keseharian lingkungan asrama santri KH. Nursalam'
+    },
+    faq: {
+      eyebrow: 'Informasi Umum',
+      title: 'Pertanyaan Yang Sering Diajukan (FAQ)',
+      desc: 'Kami mengumpulkan pertanyaan utama orangtua wali saat mendaftarkan putra-putrinya'
+    }
+  };
+
+  const programToneClasses: Record<string, { box: string; icon: string; badge: string }> = {
+    green: { box: 'bg-white border-slate-200/80', icon: 'bg-green-50 text-green-700 border-green-100', badge: 'text-green-700 bg-green-50' },
+    indigo: { box: 'bg-white border-slate-200/80', icon: 'bg-indigo-50 text-indigo-700 border-indigo-100', badge: 'text-indigo-700 bg-indigo-50' },
+    amber: { box: 'bg-white border-slate-200/80', icon: 'bg-amber-50 text-amber-700 border-amber-100', badge: 'text-amber-700 bg-amber-50' },
+    rose: { box: 'bg-white border-slate-200/80', icon: 'bg-rose-50 text-rose-700 border-rose-100', badge: 'text-rose-700 bg-rose-50' }
+  };
+
+  const getProgramIcon = (icon?: string) => {
+    if (icon === 'GraduationCap') return GraduationCap;
+    if (icon === 'ShieldCheck') return ShieldCheck;
+    if (icon === 'Activity') return Activity;
+    if (icon === 'Sparkles') return Sparkles;
+    return BookOpen;
+  };
+
   const getRoutines = () => {
     if (profilPP?.routines_json) {
       try {
@@ -298,28 +405,52 @@ export function LandingPage({
     return defaultTestimonials;
   };
 
+  const getPrograms = () => {
+    if (profilPP?.programs_json) {
+      try {
+        const parsed = JSON.parse(profilPP.programs_json);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        // fallback
+      }
+    }
+    return defaultPrograms;
+  };
+
+  const getFaqs = () => {
+    if (profilPP?.faq_json) {
+      try {
+        const parsed = JSON.parse(profilPP.faq_json);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        // fallback
+      }
+    }
+    return defaultFaqs;
+  };
+
+  const getSectionTitles = () => {
+    if (profilPP?.section_titles_json) {
+      try {
+        const parsed = JSON.parse(profilPP.section_titles_json);
+        return Object.keys(defaultSectionTitles).reduce((acc: any, key) => ({
+          ...acc,
+          [key]: { ...(defaultSectionTitles as any)[key], ...(parsed?.[key] || {}) }
+        }), {});
+      } catch (e) {
+        // fallback
+      }
+    }
+    return defaultSectionTitles;
+  };
+
   const routines = getRoutines();
   const facilities = getFacilities();
   const testimonials = getTestimonials();
-
-  const faqs = [
-    {
-      q: 'Bagaimana wali santri memantau perkembangan hafalan Al-Quran?',
-      a: 'Setiap kali santri menyetor hafalan kepada Ustadz pengampu di halaqah subuh/ashar, data setoran (nama surah, ayat, tingkat kelancaran) langsung diinput ke sistem. Wali santri akan menerima notifikasi real-time dan dapat melihat rekam jejak lengkap hafalan melalui akun Portal Wali masing-masing.'
-    },
-    {
-      q: 'Apakah biaya SPP dan uang pendaftaran dapat dibayar cicil?',
-      a: 'Ya, Mathlabul Hidayah menyediakan skema kuitansi digital transparan. Pembayaran dapat dikonfirmasi lewat upload tanda bukti transfer di Portal Wali. Sistem akan memverifikasi pembayaran secara real-time dan mengeluarkan kuitansi digital bermeterai yang sah.'
-    },
-    {
-      q: 'Bagaimana prosedur penanganan pelanggaran santri?',
-      a: 'Pesantren menggunakan sistem poin kedisiplinan yang berimbang guna membina akhlaq santri. Apabila terdapat pelanggaran santri (ringan/sedang/berat), guru BK asrama menginput laporan disertai rincian tindakan pembinaan. Laporan tersebut langsung tersinkronisasi ke dashboard wali santri sebagai media evaluasi bersama.'
-    },
-    {
-      q: 'Apakah calon santri baru wajib memiliki hafalan Al-Quran sebelum mendaftar?',
-      a: 'Tidak wajib. Kami memiliki program kelas persiapan (Tahsin I\'dad) selama 3 bulan pertama untuk memantapkan bacaan sesuai tajwid sebelum santri memulai menghafal Al-Quran.'
-    }
-  ];
+  const programs = getPrograms();
+  const faqs = getFaqs();
+  const sectionTitles = getSectionTitles();
+  const selectedFacility = facilities.find((fac: any) => fac.id === activeFacility) || facilities[0];
 
   return (
     <div className="flex flex-col flex-1 w-full relative bg-slate-50 overflow-x-hidden min-h-screen">
@@ -718,61 +849,28 @@ export function LandingPage({
       <section id="program" className="py-20 bg-slate-50 px-6 lg:px-12 select-none border-t border-b border-slate-200/50">
         <div className="max-w-7xl mx-auto space-y-12">
           <div className="text-center space-y-2">
-            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">Kurikulum Khusus Terarah</span>
-            <h2 className="text-3xl font-black text-slate-800">4 Pilar Kurikulum Unggulan Ponpes</h2>
-            <p className="text-xs text-slate-400 max-w-lg mx-auto">Dirancang seimbang guna membidani kesiapan santri berkhidmah kepada masyarakat dan melanjutkan ke universitas ternama</p>
+            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">{sectionTitles.program.eyebrow}</span>
+            <h2 className="text-3xl font-black text-slate-800">{sectionTitles.program.title}</h2>
+            <p className="text-xs text-slate-400 max-w-lg mx-auto">{sectionTitles.program.desc}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            
-            {/* Pilar 1 */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 space-y-4 hover:shadow-lg transition-all hover:-translate-y-1">
-              <div className="p-3.5 bg-green-50 text-green-700 w-fit rounded-2xl border border-green-100">
-                <BookOpen className="w-6 h-6" />
-              </div>
-              <h4 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Tahfidz Quran Mutqin</h4>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Metode akselerasi talaqqi menyetor 1 halaman per hari bersertifikat sanad hafidz mutqin di bawah pengawasan asatidzah sanad Madinah.
-              </p>
-              <span className="text-[10px] text-green-700 font-extrabold uppercase bg-green-50 px-2 py-0.5 rounded-full inline-block">Sabaq, Sabqi, Manzil</span>
-            </div>
-
-            {/* Pilar 2 */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 space-y-4 hover:shadow-lg transition-all hover:-translate-y-1">
-              <div className="p-3.5 bg-indigo-50 text-indigo-700 w-fit rounded-2xl border border-indigo-100">
-                <GraduationCap className="w-6 h-6" />
-              </div>
-              <h4 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Kajian Kitab Turots</h4>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Pendalaman keilmuan madzhab Syafi'iyyah, aqidah Asy'ariyah, & tasawuf bersanad menggunakan khazanah rujukan kitab kuning utama.
-              </p>
-              <span className="text-[10px] text-indigo-700 font-extrabold uppercase bg-indigo-50 px-2 py-0.5 rounded-full inline-block">Fathul Qorib, Ta'lim Muta'allim</span>
-            </div>
-
-            {/* Pilar 3 */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 space-y-4 hover:shadow-lg transition-all hover:-translate-y-1">
-              <div className="p-3.5 bg-amber-50 text-amber-700 w-fit rounded-2xl border border-amber-100">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <h4 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Bilingual Immersion Camp</h4>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Penerapan bahasa Arab & Inggris harian asrama secara aktif menggunakan asrama bahasa khusus dengan mutabaah mingguan.
-              </p>
-              <span className="text-[10px] text-amber-700 font-extrabold uppercase bg-amber-50 px-2 py-0.5 rounded-full inline-block">Active Speaking & Debate</span>
-            </div>
-
-            {/* Pilar 4 */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 space-y-4 hover:shadow-lg transition-all hover:-translate-y-1">
-              <div className="p-3.5 bg-rose-50 text-rose-700 w-fit rounded-2xl border border-rose-100">
-                <Activity className="w-6 h-6" />
-              </div>
-              <h4 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Pendidikan Formal MTs/MA</h4>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Lembaga Madrasah Tsanawiyyah & Madrasah Aliyah berakreditasi A, membina ilmu umum eksakta modern penunjang studi lanjut.
-              </p>
-              <span className="text-[10px] text-rose-700 font-extrabold uppercase bg-rose-50 px-2 py-0.5 rounded-full inline-block">Kurikulum Kementerian Agama</span>
-            </div>
-
+            {programs.map((program: any, index: number) => {
+              const Icon = getProgramIcon(program.icon);
+              const tone = programToneClasses[program.tone || 'green'] || programToneClasses.green;
+              return (
+                <div key={program.id || index} className={`${tone.box} p-6 rounded-3xl border space-y-4 hover:shadow-lg transition-all hover:-translate-y-1`}>
+                  <div className={`p-3.5 w-fit rounded-2xl border ${tone.icon}`}>
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">{program.title}</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">{program.desc}</p>
+                  {program.badge && (
+                    <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full inline-block ${tone.badge}`}>{program.badge}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -783,9 +881,9 @@ export function LandingPage({
       <section className="py-20 bg-white px-6 lg:px-12 select-none border-b border-slate-200/50">
         <div className="max-w-5xl mx-auto space-y-10">
           <div className="text-center space-y-2">
-            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">Agenda Harian</span>
-            <h2 className="text-3xl font-black text-slate-800">Bagaimana Keseharian Santri Mukim?</h2>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">Kami mengedepankan pembiasaan disiplin positif dan keseimbangan asupan ilmu, jasmani, gizi, & waktu istirahat yang proporsional.</p>
+            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">{sectionTitles.routine.eyebrow}</span>
+            <h2 className="text-3xl font-black text-slate-800">{sectionTitles.routine.title}</h2>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">{sectionTitles.routine.desc}</p>
           </div>
 
           {/* Interactive tabs navigation */}
@@ -845,9 +943,9 @@ export function LandingPage({
       <section className="py-20 bg-white px-6 lg:px-12 select-none border-b border-slate-200/50">
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-2">
-            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">Fasilitas Pesantren</span>
-            <h2 className="text-3xl font-black text-slate-800">Sarana Penunjang Terbaik Hafizh</h2>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">Kami menginvestasikan sarana infrastruktur modern demi menjamin asrama yang sehat, aman, dan nyaman selama santri menempuh pendidikan.</p>
+            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">{sectionTitles.facilities.eyebrow}</span>
+            <h2 className="text-3xl font-black text-slate-800">{sectionTitles.facilities.title}</h2>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">{sectionTitles.facilities.desc}</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -898,11 +996,11 @@ export function LandingPage({
                 </div>
                 
                 <h3 className="text-2xl font-black text-slate-800 transition-all uppercase tracking-wide">
-                  {facilities[activeFacility].title}
+                  {selectedFacility?.title}
                 </h3>
                 
                 <p className="text-xs text-slate-500 leading-relaxed font-semibold transition-all">
-                  {facilities[activeFacility].desc}
+                  {selectedFacility?.desc}
                 </p>
               </div>
 
@@ -926,9 +1024,9 @@ export function LandingPage({
       <section className="py-20 bg-slate-50 px-6 lg:px-12 select-none border-b border-slate-200/50">
         <div className="max-w-7xl mx-auto space-y-12">
           <div className="text-center space-y-2 animate-fade-in">
-            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">Testimoni Wali & Tokoh</span>
-            <h2 className="text-3xl font-black text-slate-800">Apa Kata Mereka Tentang Kami?</h2>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">Kami bangga mengutamakan kepuasan, kejujuran, dan sinergi bimbingan harian tervalidasi.</p>
+            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">{sectionTitles.testimonials.eyebrow}</span>
+            <h2 className="text-3xl font-black text-slate-800">{sectionTitles.testimonials.title}</h2>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">{sectionTitles.testimonials.desc}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
@@ -980,10 +1078,10 @@ export function LandingPage({
 
           <div className="text-center space-y-2 select-none">
             <span className="px-3.5 py-1.5 bg-green-50 rounded-full border border-green-200 text-green-800 text-[9px] font-black uppercase tracking-widest inline-block">
-              PENERIMAAN SANTRI BARU T.A 2026/2027
+              {sectionTitles.psb.eyebrow}
             </span>
-            <h2 className="text-2xl font-black text-slate-800 uppercase leading-snug">Formulir Pendaftaran Online</h2>
-            <p className="text-xs text-slate-400">Pendaftaran kelas MTs (SMP) & MA (SMA) terakreditasi resmi Pemerintah</p>
+            <h2 className="text-2xl font-black text-slate-800 uppercase leading-snug">{sectionTitles.psb.title}</h2>
+            <p className="text-xs text-slate-400">{sectionTitles.psb.desc}</p>
           </div>
 
           {psbSuccess && (
@@ -1083,10 +1181,10 @@ export function LandingPage({
         <div className="max-w-7xl mx-auto space-y-10">
           <div className="text-between flex flex-col md:flex-row justify-between items-start md:items-end gap-3 border-b border-slate-100 pb-5">
             <div>
-              <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block mb-1">Rilis Kegiatan</span>
-              <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-wide">Kajian & Warta Ponpes Terbaru</h2>
+              <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block mb-1">{sectionTitles.berita.eyebrow}</span>
+              <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-wide">{sectionTitles.berita.title}</h2>
             </div>
-            <p className="text-xs text-slate-400">Informasi autentik keseharian lingkungan asrama santri KH. Nursalam</p>
+            <p className="text-xs text-slate-400">{sectionTitles.berita.desc}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1157,9 +1255,9 @@ export function LandingPage({
       <section id="faq" className="py-20 bg-slate-50 px-6 lg:px-12 select-none border-b border-slate-200/50">
         <div className="max-w-4xl mx-auto space-y-12">
           <div className="text-center space-y-2">
-            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">Informasi Umum</span>
-            <h2 className="text-3xl font-black text-slate-800">Pertanyaan Yang Sering Diajukan (FAQ)</h2>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">Kami mengumpulkan pertanyaan utama orangtua wali saat mendaftarkan putra-putrinya</p>
+            <span className="text-green-700 text-xs font-black uppercase tracking-widest leading-none block">{sectionTitles.faq.eyebrow}</span>
+            <h2 className="text-3xl font-black text-slate-800">{sectionTitles.faq.title}</h2>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">{sectionTitles.faq.desc}</p>
           </div>
 
           <div className="space-y-3.5 max-w-3xl mx-auto">
@@ -1273,7 +1371,7 @@ export function LandingPage({
         </motion.div>
       </AnimatePresence>
 
-      <Footer onNavigate={setActiveTab} />
+      <Footer profilPP={profilPP} onNavigate={setActiveTab} />
 
       {/* Selected News/Berita Dialog Modal */}
       <AnimatePresence>

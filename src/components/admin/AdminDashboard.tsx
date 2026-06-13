@@ -4,7 +4,7 @@ import {
   Users, ShieldAlert, BookOpen, CreditCard, History, Settings, 
   Plus, Trash2, Edit, Save, Newspaper, Megaphone, HelpCircle, 
   DollarSign, Check, Activity, RefreshCw, Eye, Sparkles, UserCheck,
-  AlertTriangle, Shield, CheckCircle2, Trash, X, Calendar, Lock, GraduationCap, Link, Phone, Mail, User,
+  AlertTriangle, Shield, CheckCircle2, Trash, X, Calendar, Lock, GraduationCap, Link, Phone, Mail, User, MapPin,
   Download, FileText, Search, Printer
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -42,6 +42,36 @@ const DEFAULT_SANCTION_RULES: SanctionRule[] = [
   { id: 'pembinaan', title: 'Pembinaan', min: 25, max: 49, desc: 'Pemanggilan santri, nasihat tertulis, dan monitoring perilaku.', tone: 'amber' },
   { id: 'takzir', title: 'Kritis / Takzir', min: 50, max: null, desc: 'Tindak lanjut takzir, pemanggilan wali, atau rapat kedisiplinan.', tone: 'red' }
 ];
+
+const DEFAULT_FOOTER_DESCRIPTION = 'Membentuk generasi Qurani, berakhlaqul karimah, mandiri, dan berwawasan iptek modern. Pendidikan salafiyah yang bersinergi dalam lingkungan modern kondusif.';
+const DEFAULT_SOCIAL_LINKS_JSON = JSON.stringify([
+  { platform: 'instagram', label: 'Instagram', url: '' },
+  { platform: 'facebook', label: 'Facebook', url: '' },
+  { platform: 'youtube', label: 'YouTube', url: '' },
+  { platform: 'tiktok', label: 'TikTok', url: '' },
+  { platform: 'whatsapp', label: 'WhatsApp', url: '' }
+], null, 2);
+const DEFAULT_PROGRAMS_JSON = JSON.stringify([
+  { id: 1, title: 'Tahfidz Quran Mutqin', desc: 'Metode akselerasi talaqqi menyetor 1 halaman per hari bersertifikat sanad hafidz mutqin di bawah pengawasan asatidzah.', icon: 'BookOpen', badge: 'Sabaq, Sabqi, Manzil', tone: 'green' },
+  { id: 2, title: 'Kajian Kitab Turots', desc: 'Pendalaman keilmuan madzhab Syafiiyyah, aqidah Asyariyah, dan tasawuf bersanad menggunakan khazanah kitab kuning utama.', icon: 'GraduationCap', badge: 'Fathul Qorib, Talim Mutaallim', tone: 'indigo' },
+  { id: 3, title: 'Bilingual Immersion Camp', desc: 'Penerapan bahasa Arab dan Inggris harian asrama secara aktif dengan mutabaah mingguan.', icon: 'ShieldCheck', badge: 'Active Speaking & Debate', tone: 'amber' },
+  { id: 4, title: 'Pendidikan Formal MTs/MA', desc: 'Madrasah Tsanawiyyah dan Madrasah Aliyah berakreditasi A untuk menunjang studi lanjut.', icon: 'Activity', badge: 'Kurikulum Kementerian Agama', tone: 'rose' }
+], null, 2);
+const DEFAULT_FAQ_JSON = JSON.stringify([
+  { q: 'Bagaimana wali santri memantau perkembangan hafalan Al-Quran?', a: 'Wali santri dapat melihat rekam jejak setoran hafalan melalui akun Portal Wali masing-masing.' },
+  { q: 'Apakah biaya SPP dan uang pendaftaran dapat dibayar cicil?', a: 'Ya, pembayaran dapat dikonfirmasi melalui Portal Wali dan diverifikasi oleh admin.' },
+  { q: 'Bagaimana prosedur penanganan pelanggaran santri?', a: 'Pelanggaran dicatat dengan sistem poin kedisiplinan dan dapat dipantau oleh wali santri.' },
+  { q: 'Apakah calon santri wajib memiliki hafalan sebelum mendaftar?', a: 'Tidak wajib. Santri baru akan mendapat pembinaan tahsin dan persiapan hafalan.' }
+], null, 2);
+const DEFAULT_SECTION_TITLES_JSON = JSON.stringify({
+  program: { eyebrow: 'Kurikulum Khusus Terarah', title: '4 Pilar Kurikulum Unggulan Ponpes', desc: 'Dirancang seimbang untuk kesiapan santri berkhidmah dan melanjutkan studi.' },
+  routine: { eyebrow: 'Agenda Harian', title: 'Bagaimana Keseharian Santri Mukim?', desc: 'Pembiasaan disiplin positif dengan keseimbangan ilmu, jasmani, gizi, dan istirahat.' },
+  facilities: { eyebrow: 'Fasilitas Pesantren', title: 'Sarana Penunjang Terbaik Hafizh', desc: 'Sarana modern untuk asrama yang sehat, aman, dan nyaman.' },
+  testimonials: { eyebrow: 'Testimoni Wali & Tokoh', title: 'Apa Kata Mereka Tentang Kami?', desc: 'Kepuasan, kejujuran, dan sinergi bimbingan harian tervalidasi.' },
+  psb: { eyebrow: 'PENERIMAAN SANTRI BARU T.A 2026/2027', title: 'Formulir Pendaftaran Online', desc: 'Pendaftaran kelas MTs dan MA terakreditasi resmi Pemerintah.' },
+  berita: { eyebrow: 'Rilis Kegiatan', title: 'Kajian & Warta Ponpes Terbaru', desc: 'Informasi autentik keseharian lingkungan asrama santri.' },
+  faq: { eyebrow: 'Informasi Umum', title: 'Pertanyaan Yang Sering Diajukan (FAQ)', desc: 'Pertanyaan utama orang tua wali saat mendaftarkan putra-putrinya.' }
+}, null, 2);
 
 const createClientUuid = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -150,6 +180,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [cmsTagline, setCmsTagline] = useState('');
   const [cmsVisi, setCmsVisi] = useState('');
   const [cmsMisi, setCmsMisi] = useState('');
+  const [cmsAlamat, setCmsAlamat] = useState('');
+  const [cmsTelepon, setCmsTelepon] = useState('');
+  const [cmsEmail, setCmsEmail] = useState('');
+  const [footerDescription, setFooterDescription] = useState('');
+  const [footerCopyright, setFooterCopyright] = useState('');
 
   const [heroBgColor, setHeroBgColor] = useState('');
   const [heroImgUrl, setHeroImgUrl] = useState('');
@@ -173,6 +208,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [routinesJson, setRoutinesJson] = useState('');
   const [facilitiesJson, setFacilitiesJson] = useState('');
   const [testimonialsJson, setTestimonialsJson] = useState('');
+  const [programsJson, setProgramsJson] = useState('');
+  const [faqJson, setFaqJson] = useState('');
+  const [sectionTitlesJson, setSectionTitlesJson] = useState('');
+  const [socialLinksJson, setSocialLinksJson] = useState('');
 
   // CMS Sub Tab & Berita Manager states
   const [cmsSubTab, setCmsSubTab] = useState<'profil_hero' | 'berita'>('profil_hero');
@@ -377,6 +416,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setCmsTagline(pp.tagline || '');
       setCmsVisi(pp.visi || '');
       setCmsMisi(pp.misi || '');
+      setCmsAlamat(pp.alamat || 'Cigalontang, Kabupaten Tasikmalaya, Jawa Barat');
+      setCmsTelepon(pp.telepon || '');
+      setCmsEmail(pp.email || '');
+      setFooterDescription(pp.footer_description || DEFAULT_FOOTER_DESCRIPTION);
+      setFooterCopyright(pp.footer_copyright || `Copyright 2026 ${pp.nama || 'Pondok Pesantren Mathlabul Hidayah Nursalam'}. All rights reserved.`);
 
       setHeroBgColor(pp.hero_bg_color || 'linear-gradient(to bottom, #ecfdf5, #f8fafc)');
       setHeroImgUrl(pp.hero_img_url || '');
@@ -399,6 +443,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setRoutinesJson(pp.routines_json || '');
       setFacilitiesJson(pp.facilities_json || '');
       setTestimonialsJson(pp.testimonials_json || '');
+      setProgramsJson(pp.programs_json || DEFAULT_PROGRAMS_JSON);
+      setFaqJson(pp.faq_json || DEFAULT_FAQ_JSON);
+      setSectionTitlesJson(pp.section_titles_json || DEFAULT_SECTION_TITLES_JSON);
+      setSocialLinksJson(pp.social_links_json || DEFAULT_SOCIAL_LINKS_JSON);
     }
     } catch (error: any) {
       console.error('[Supabase Admin Load Failure]', error);
@@ -2329,6 +2377,11 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         tagline: cmsTagline,
         visi: cmsVisi,
         misi: cmsMisi,
+        alamat: cmsAlamat,
+        telepon: cmsTelepon,
+        email: cmsEmail,
+        footer_description: footerDescription,
+        footer_copyright: footerCopyright,
 
         hero_bg_color: heroBgColor,
         hero_img_url: heroImgUrl,
@@ -2351,6 +2404,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         routines_json: routinesJson,
         facilities_json: facilitiesJson,
         testimonials_json: testimonialsJson,
+        programs_json: programsJson,
+        faq_json: faqJson,
+        section_titles_json: sectionTitlesJson,
+        social_links_json: socialLinksJson,
 
         updated_at: new Date().toISOString()
       };
@@ -4102,7 +4159,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
                   <div>
                     <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Deskripsi Singkat Program:</label>
-                    <textarea 
+                    <textarea
                       rows={3}
                       value={newHapKatDeskripsi}
                       onChange={(e) => setNewHapKatDeskripsi(e.target.value)}
@@ -5487,6 +5544,63 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                       </div>
                     </div>
                   </div>
+
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-green-800 flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-green-700" /> Footer, Kontak & Identitas Landing Page
+                    </h5>
+
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Alamat Footer:</label>
+                      <textarea
+                        rows={2}
+                        value={cmsAlamat}
+                        onChange={(e) => setCmsAlamat(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-green-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Telepon / WhatsApp:</label>
+                        <input
+                          type="text"
+                          value={cmsTelepon}
+                          onChange={(e) => setCmsTelepon(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Email:</label>
+                        <input
+                          type="email"
+                          value={cmsEmail}
+                          onChange={(e) => setCmsEmail(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-green-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Deskripsi Footer:</label>
+                      <textarea
+                        rows={3}
+                        value={footerDescription}
+                        onChange={(e) => setFooterDescription(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-green-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Copyright Footer:</label>
+                      <input
+                        type="text"
+                        value={footerCopyright}
+                        onChange={(e) => setFooterCopyright(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-green-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* COLUMN 2: Stats Board & Custom Items JSON Content */}
@@ -5637,6 +5751,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                           setRoutinesJson(p.routines_json || '');
                           setFacilitiesJson(p.facilities_json || '');
                           setTestimonialsJson(p.testimonials_json || '');
+                          setProgramsJson(p.programs_json || DEFAULT_PROGRAMS_JSON);
+                          setFaqJson(p.faq_json || DEFAULT_FAQ_JSON);
+                          setSectionTitlesJson(p.section_titles_json || DEFAULT_SECTION_TITLES_JSON);
+                          setSocialLinksJson(p.social_links_json || DEFAULT_SOCIAL_LINKS_JSON);
                           alert('Berhasil reset format JSON ke default profil saat ini.');
                         }
                       } catch (err) {}
@@ -5651,10 +5769,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   *Catatan: Kolom-kolom di bawah menyimpan data layout list kompleks dlm format JSON. Harap pastikan keabsahan struktur kurung siku dan tanda kutip ganda agar tidak merusak tata letak landing page.
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div>
                     <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Agenda Harian (Routines) JSON:</label>
-                    <textarea 
+                    <textarea
                       rows={4}
                       value={routinesJson}
                       onChange={(e) => setRoutinesJson(e.target.value)}
@@ -5662,8 +5780,17 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     />
                   </div>
                   <div>
+                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Program Unggulan JSON:</label>
+                    <textarea
+                      rows={4}
+                      value={programsJson}
+                      onChange={(e) => setProgramsJson(e.target.value)}
+                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
                     <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Fasilitas Pesantren (Facilities) JSON:</label>
-                    <textarea 
+                    <textarea
                       rows={4}
                       value={facilitiesJson}
                       onChange={(e) => setFacilitiesJson(e.target.value)}
@@ -5671,13 +5798,41 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     />
                   </div>
                   <div>
+                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">FAQ Landing Page JSON:</label>
+                    <textarea
+                      rows={4}
+                      value={faqJson}
+                      onChange={(e) => setFaqJson(e.target.value)}
+                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
                     <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Komentar Wali (Testimonials) JSON:</label>
-                    <textarea 
+                    <textarea
                       rows={4}
                       value={testimonialsJson}
                       onChange={(e) => setTestimonialsJson(e.target.value)}
                       className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
                     />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Judul/Subjudul Semua Section JSON:</label>
+                    <textarea
+                      rows={4}
+                      value={sectionTitlesJson}
+                      onChange={(e) => setSectionTitlesJson(e.target.value)}
+                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-black uppercase text-amber-800 block mb-1">Link Media Sosial JSON:</label>
+                    <textarea
+                      rows={4}
+                      value={socialLinksJson}
+                      onChange={(e) => setSocialLinksJson(e.target.value)}
+                      className="w-full bg-white border border-amber-200 rounded-xl px-2 py-1.5 text-[9px] font-mono leading-tight focus:outline-none focus:border-amber-500"
+                    />
+                    <p className="text-[9px] text-amber-700 mt-1">Isi url untuk menampilkan tombol logo medsos di footer.</p>
                   </div>
                 </div>
               </div>
@@ -5728,7 +5883,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                         <div className="w-full h-full bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center text-green-800 px-4 text-center">
                           <Newspaper className="w-10 h-10 text-green-300 absolute" />
                           <span className="text-[10px] font-black uppercase text-green-800/40 relative z-10 p-5 leading-relaxed">
-                            PONDOK PESANTREN<br/>MATHLA'BUL HIDAYAH
+                            PONDOK PESANTREN<br/>MATHLABUL HIDAYAH
                           </span>
                         </div>
                       )}
