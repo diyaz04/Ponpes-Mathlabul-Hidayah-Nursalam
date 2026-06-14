@@ -308,6 +308,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [cfgTagihanSearch, setCfgTagihanSearch] = useState('');
   const [cfgTagihanStatusFilter, setCfgTagihanStatusFilter] = useState<'semua' | 'pending' | 'lunas'>('pending');
   const [cfgTagihanJenisFilter, setCfgTagihanJenisFilter] = useState('semua');
+  const [billingSubTab, setBillingSubTab] = useState<'atur' | 'generate' | 'monitoring'>('atur');
   const [cfgPaymentSearch, setCfgPaymentSearch] = useState('');
   const [rekapSubTab, setRekapSubTab] = useState<'riwayat' | 'tagihan_tersebar'>('riwayat');
   const [rekapRiwayatTab, setRekapRiwayatTab] = useState<'laporan' | 'kategori' | 'spp' | 'transaksi'>('laporan');
@@ -4806,9 +4807,46 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
       {/* Tab: Create bulking billing tagihans */}
       {activeTab === 'pembayaran_config' && (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl border border-gray-150 p-2 shadow-sm select-none">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              {[
+                { id: 'atur', label: 'Atur Jenis Iuran', desc: `${jPembayaranList.length} kategori`, icon: Settings },
+                { id: 'generate', label: 'Generate Tagihan', desc: 'Buat invoice santri', icon: CreditCard },
+                { id: 'monitoring', label: 'Monitoring Tagihan', desc: `${bills.filter(b => b.status === 'pending').length} pending`, icon: Activity }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const active = billingSubTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setBillingSubTab(tab.id as typeof billingSubTab)}
+                    className={`min-h-16 rounded-2xl px-4 py-3 text-left transition-all cursor-pointer flex items-center gap-3 ${
+                      active
+                        ? 'bg-green-700 text-white shadow-sm'
+                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                    }`}
+                  >
+                    <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      active ? 'bg-white/15 text-white' : 'bg-white text-green-700 border border-slate-100'
+                    }`}>
+                      <Icon className="w-4.5 h-4.5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs font-black uppercase tracking-wider truncate">{tab.label}</span>
+                      <span className={`block text-[10px] font-bold mt-0.5 truncate ${active ? 'text-green-100' : 'text-slate-400'}`}>{tab.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           
-          <form onSubmit={handleBulkGenerateTagihan} className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-150 space-y-4">
+          {billingSubTab === 'generate' && (
+          <form onSubmit={handleBulkGenerateTagihan} className="lg:col-span-5 bg-white p-6 rounded-3xl border border-gray-150 space-y-4">
             <h4 className="font-extrabold text-gray-900 text-xs uppercase tracking-widest border-b border-gray-100 pb-3 select-none">Bulk Generate Tagihan Baru</h4>
             <p className="text-[11px] text-gray-400 leading-normal mb-3 select-none">Isi parameter di bawah ini untuk membuat invoice SPP ke SEMUA wali murid serentak secara real-time.</p>
             
@@ -4999,8 +5037,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               💡 Daftar seluruh tagihan berjalan dapat langsung dipantau di <strong>Panel Monitoring</strong> di bagian bawah halaman ini.
             </div>
           </form>
+          )}
 
-          <div className="lg:col-span-3 space-y-6">
+          {billingSubTab === 'atur' && (
+          <div className="lg:col-span-5 grid grid-cols-1 xl:grid-cols-2 gap-6">
             
             {/* Form: Tambah Jenis Tagihan/Iuran Baru */}
             <form onSubmit={handleCreateJenisPembayaran} className="bg-white p-6 rounded-3xl border border-gray-150 space-y-4">
@@ -5076,8 +5116,10 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             </div>
 
           </div>
+          )}
 
           {/* PANEL TAGIHAN YANG SEDANG AKTIF / BERJALAN */}
+          {billingSubTab === 'monitoring' && (
           <div className="lg:col-span-5 bg-white p-6 rounded-3xl border border-gray-150 shadow-sm text-left space-y-4">
             <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 select-none">
               <div>
@@ -5348,7 +5390,9 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               return null;
             })()}
           </div>
+          )}
 
+        </div>
         </div>
       )}
 

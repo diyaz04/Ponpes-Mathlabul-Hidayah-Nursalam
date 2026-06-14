@@ -617,8 +617,8 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
             <div className="space-y-6">
               
               {/* Top Hero Student Profile Card */}
-              <div className="bg-gradient-to-r from-green-600 to-green-800 rounded-3xl p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden select-none">
-                <div className="relative z-10 space-y-2">
+              <div className="bg-gradient-to-r from-green-600 to-green-800 rounded-3xl p-5 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-5 md:gap-6 relative overflow-hidden select-none text-center md:text-left">
+                <div className="relative z-10 space-y-2 md:flex-1 md:min-w-0">
                   <span className="px-2.5 py-1 bg-white/10 text-[9px] font-black uppercase tracking-wider rounded-lg border border-white/10">Wali Santri Dashboard</span>
                   <h3 className="text-2xl font-black">{selectedSantri.nama}</h3>
                   <p className="text-green-100 text-xs font-semibold">
@@ -627,7 +627,26 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
                   <p className="text-green-200 font-medium text-[10px] uppercase tracking-widest mt-1">Status: {selectedSantri.status}</p>
                 </div>
 
-                <div className="text-right relative z-10 mt-4 md:mt-0 space-y-1">
+                <div className="relative z-10 mx-auto md:mx-6">
+                  <div className="relative w-[120px] h-[120px] sm:w-[136px] sm:h-[136px] rounded-[28px] bg-white/15 p-2 shadow-2xl ring-1 ring-white/20 backdrop-blur-sm">
+                    <div className="w-full h-full rounded-[22px] overflow-hidden bg-white flex items-center justify-center border-4 border-white/90 shadow-inner">
+                      {selectedSantri.foto_url ? (
+                        <img
+                          src={selectedSantri.foto_url}
+                          alt={`Foto ${selectedSantri.nama}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-4xl font-black text-green-700">{selectedSantri.nama.charAt(0)}</span>
+                      )}
+                    </div>
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white text-green-800 text-[9px] font-black uppercase tracking-wider shadow-md border border-green-100 whitespace-nowrap">
+                      Santri Aktif
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-center md:text-right relative z-10 md:flex-1 md:min-w-0 space-y-1">
                   <div className="text-[10px] uppercase font-bold tracking-widest text-green-200 leading-none">Poin Pelanggaran Aktif:</div>
                   <div className="text-5xl font-black tracking-tight">{currentPelanggaranSum}</div>
                   <div className="text-[10px] text-green-300 font-semibold">{currentPelanggaranSum > 0 ? 'Harap bimbing kembali adab santri' : 'Santri disiplin & berakhlaq karimah'}</div>
