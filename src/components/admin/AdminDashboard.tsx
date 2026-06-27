@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
-import { db, dbLocal, insertNotification, isRealSupabaseConfigured, supabase } from '../../lib/supabase';
+import { DEFAULT_PAYMENT_CONFIG, db, dbLocal, insertNotification, isRealSupabaseConfigured, supabase } from '../../lib/supabase';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 import { 
   Santri, Profile, Tagihan, Pembayaran, JenisPembayaran, 
-  ProfilPesantren, Berita, Pengumuman, Pelanggaran, SetoranHapalan, JenisPelanggaran, KategoriHapalan, PSB, PSBPendaftar
+  ProfilPesantren, Berita, Pengumuman, Pelanggaran, SetoranHapalan, JenisPelanggaran, KategoriHapalan, PSB, PSBPendaftar, PaymentConfig
 } from '../../types';
 import { ImageUploader } from '../shared/ImageUploader';
 import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
@@ -165,6 +165,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [jPembayaranList, setJPembayaranList] = useState<JenisPembayaran[]>([]);
   const [bills, setBills] = useState<Tagihan[]>([]);
   const [payments, setPayments] = useState<Pembayaran[]>([]);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(DEFAULT_PAYMENT_CONFIG);
   const [beritaList, setBeritaList] = useState<Berita[]>([]);
   const [announcements, setAnnouncements] = useState<Pengumuman[]>([]);
   const [profilPP, setProfilPP] = useState<ProfilPesantren | null>(null);
@@ -308,7 +309,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [cfgTagihanSearch, setCfgTagihanSearch] = useState('');
   const [cfgTagihanStatusFilter, setCfgTagihanStatusFilter] = useState<'semua' | 'pending' | 'lunas'>('pending');
   const [cfgTagihanJenisFilter, setCfgTagihanJenisFilter] = useState('semua');
-  const [billingSubTab, setBillingSubTab] = useState<'atur' | 'generate' | 'monitoring'>('atur');
+  const [billingSubTab, setBillingSubTab] = useState<'metode' | 'atur' | 'generate' | 'monitoring' | 'verifikasi'>('metode');
+  const [paymentModeForm, setPaymentModeForm] = useState<PaymentConfig['metode_aktif']>('midtrans');
+  const [paymentBankName, setPaymentBankName] = useState(DEFAULT_PAYMENT_CONFIG.bank_name || '');
+  const [paymentAccountNumber, setPaymentAccountNumber] = useState('');
+  const [paymentAccountName, setPaymentAccountName] = useState(DEFAULT_PAYMENT_CONFIG.account_name || '');
+  const [paymentInstructions, setPaymentInstructions] = useState(DEFAULT_PAYMENT_CONFIG.instructions || '');
   const [cfgPaymentSearch, setCfgPaymentSearch] = useState('');
   const [rekapSubTab, setRekapSubTab] = useState<'riwayat' | 'tagihan_tersebar'>('riwayat');
   const [rekapRiwayatTab, setRekapRiwayatTab] = useState<'laporan' | 'kategori' | 'spp' | 'transaksi'>('laporan');
@@ -436,7 +442,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         jenisPelanggaran,
         psb,
         psbPendaftar,
-        pp
+        pp,
+        paymentCfg
       ] = await Promise.all([
         db.santri(),
         db.profiles(),
@@ -451,7 +458,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         db.jenisPelanggaran(),
         db.psb(),
         db.psbPendaftar(),
-        db.profilPesantren()
+        db.profilPesantren(),
+        db.paymentConfig()
       ]);
 
       setSantriList(santri);
@@ -467,6 +475,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setVJenisList(jenisPelanggaran);
       setPsbConfig(psb);
       setPsbPendaftarList(psbPendaftar);
+      setPaymentConfig(paymentCfg || DEFAULT_PAYMENT_CONFIG);
+      setPaymentModeForm((paymentCfg || DEFAULT_PAYMENT_CONFIG).metode_aktif);
+      setPaymentBankName((paymentCfg || DEFAULT_PAYMENT_CONFIG).bank_name || '');
+      setPaymentAccountNumber((paymentCfg || DEFAULT_PAYMENT_CONFIG).account_number || '');
+      setPaymentAccountName((paymentCfg || DEFAULT_PAYMENT_CONFIG).account_name || '');
+      setPaymentInstructions((paymentCfg || DEFAULT_PAYMENT_CONFIG).instructions || '');
 
     if (psb) {
       setPsbTahunAjaran(psb.tahun_ajaran || '2026/2027');
@@ -526,7 +540,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
   useRealtime(
     refreshAdminData,
-    ['profiles', 'santri', 'jenis_pembayaran', 'tagihan', 'pembayaran', 'berita', 'pengumuman', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'jenis_pelanggaran', 'profil_pesantren', 'psb', 'psb_pendaftar']
+    ['profiles', 'santri', 'jenis_pembayaran', 'tagihan', 'pembayaran', 'payment_config', 'berita', 'pengumuman', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'jenis_pelanggaran', 'profil_pesantren', 'psb', 'psb_pendaftar']
   );
 
   const getWaliName = (id?: string) => {
@@ -535,6 +549,121 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
   const getJenisName = (id: string) => {
     return jPembayaranList.find(j => j.id === id)?.nama || 'Jenis Pembayaran';
+  };
+
+  const manualVerificationQueue = payments
+    .filter(p => p.status === 'menunggu_verifikasi')
+    .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+
+  const getBillByPayment = (payment: Pembayaran) => bills.find(t => t.id === payment.tagihan_id);
+  const getSantriByBill = (bill?: Tagihan) => bill ? santriList.find(s => s.id === bill.santri_id) : undefined;
+
+  const handleSavePaymentConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nextConfig: PaymentConfig = {
+      id: paymentConfig.id || DEFAULT_PAYMENT_CONFIG.id,
+      metode_aktif: paymentModeForm,
+      bank_name: paymentBankName.trim(),
+      account_number: paymentAccountNumber.trim(),
+      account_name: paymentAccountName.trim(),
+      instructions: paymentInstructions.trim(),
+      is_active: true,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      if (isRealSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('payment_config')
+          .upsert(nextConfig)
+          .select('*')
+          .single<PaymentConfig>();
+        if (error) throw error;
+        setPaymentConfig(data || nextConfig);
+      } else {
+        setPaymentConfig(nextConfig);
+        dbLocal.setPaymentConfig(nextConfig);
+      }
+
+      setActionDoneMsg('✅ Pengaturan metode pembayaran berhasil disimpan.');
+      setTimeout(() => setActionDoneMsg(null), 4000);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal menyimpan konfigurasi pembayaran: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
+  };
+
+  const handleVerifyManualPayment = async (paymentId: string, decision: 'approve' | 'reject') => {
+    const payment = payments.find(p => p.id === paymentId);
+    if (!payment) return;
+
+    const bill = getBillByPayment(payment);
+    const santri = getSantriByBill(bill);
+    const now = new Date().toISOString();
+    const approved = decision === 'approve';
+    const paymentUpdate: Partial<Pembayaran> = approved
+      ? {
+          status: 'lunas',
+          metode: 'Transfer Manual Terverifikasi',
+          paid_at: now,
+          verified_at: now,
+          verified_by: user?.id,
+          updated_at: now,
+          catatan: 'Bukti transfer disetujui admin.'
+        }
+      : {
+          status: 'gagal',
+          verified_at: now,
+          verified_by: user?.id,
+          updated_at: now,
+          catatan: 'Bukti transfer ditolak admin. Wali perlu mengunggah ulang bukti pembayaran.'
+        };
+
+    try {
+      if (isRealSupabaseConfigured && supabase) {
+        const { error: paymentError } = await supabase
+          .from('pembayaran')
+          .update(paymentUpdate)
+          .eq('id', paymentId);
+        if (paymentError) throw paymentError;
+
+        if (approved && bill) {
+          const { error: billError } = await supabase
+            .from('tagihan')
+            .update({ status: 'lunas' })
+            .eq('id', bill.id);
+          if (billError) throw billError;
+        }
+      } else {
+        const nextPayments = payments.map(p => p.id === paymentId ? { ...p, ...paymentUpdate } as Pembayaran : p);
+        setPayments(nextPayments);
+        if (approved && bill) {
+          setBills(prev => prev.map(b => b.id === bill.id ? { ...b, status: 'lunas' } : b));
+        }
+      }
+
+      if (isRealSupabaseConfigured && santri?.wali_id) {
+        await insertNotification({
+          user_id: santri.wali_id,
+          judul: approved ? 'Pembayaran Diverifikasi' : 'Bukti Pembayaran Ditolak',
+          pesan: approved
+            ? `Pembayaran ${bill ? getJenisName(bill.jenis_id) : 'tagihan'} ${bill?.bulan || ''} ${bill?.tahun || ''} telah disetujui admin.`
+            : `Bukti pembayaran ${bill ? getJenisName(bill.jenis_id) : 'tagihan'} ${bill?.bulan || ''} ${bill?.tahun || ''} ditolak. Silakan unggah ulang bukti yang benar.`,
+          tipe: 'pembayaran',
+          ref_id: paymentId,
+          is_read: false
+        }).catch(() => undefined);
+      }
+
+      if (isRealSupabaseConfigured) {
+        await refreshAdminData();
+      }
+      setActionDoneMsg(approved ? '✅ Bukti pembayaran disetujui dan tagihan menjadi lunas.' : '⚠️ Bukti pembayaran ditolak. Wali dapat mengunggah ulang.');
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    } catch (err: any) {
+      setActionDoneMsg(`❌ Gagal memproses verifikasi: ${err.message || err}`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+    }
   };
 
   const monthNamesFull = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -4809,11 +4938,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       {activeTab === 'pembayaran_config' && (
         <div className="space-y-6">
           <div className="bg-white rounded-3xl border border-gray-150 p-2 shadow-sm select-none">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
               {[
+                { id: 'metode', label: 'Metode Pembayaran', desc: paymentConfig.metode_aktif === 'midtrans' ? 'Midtrans aktif' : 'Upload bukti aktif', icon: CreditCard },
                 { id: 'atur', label: 'Atur Jenis Iuran', desc: `${jPembayaranList.length} kategori`, icon: Settings },
                 { id: 'generate', label: 'Generate Tagihan', desc: 'Buat invoice santri', icon: CreditCard },
-                { id: 'monitoring', label: 'Monitoring Tagihan', desc: `${bills.filter(b => b.status === 'pending').length} pending`, icon: Activity }
+                { id: 'monitoring', label: 'Monitoring Tagihan', desc: `${bills.filter(b => b.status === 'pending').length} pending`, icon: Activity },
+                { id: 'verifikasi', label: 'Verifikasi Bukti', desc: `${manualVerificationQueue.length} menunggu`, icon: FileText }
               ].map((tab) => {
                 const Icon = tab.icon;
                 const active = billingSubTab === tab.id;
@@ -4844,6 +4975,66 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+          {billingSubTab === 'metode' && (
+          <form onSubmit={handleSavePaymentConfig} className="lg:col-span-5 bg-white p-6 rounded-3xl border border-gray-150 shadow-sm space-y-5 text-left">
+            <div className="border-b border-gray-100 pb-4 select-none">
+              <h4 className="font-black text-gray-900 text-xs uppercase tracking-widest">Konfigurasi Metode Pembayaran Wali</h4>
+              <p className="text-[11px] text-gray-400 mt-1">Pilih apakah wali membayar lewat Midtrans atau transfer manual dengan unggah bukti pembayaran.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentModeForm('midtrans')}
+                className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
+                  paymentModeForm === 'midtrans'
+                    ? 'bg-green-50 border-green-300 text-green-800 ring-1 ring-green-100'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <p className="text-xs font-black uppercase tracking-widest">Midtrans Payment Gateway</p>
+                <p className="text-[11px] font-semibold mt-1 leading-relaxed">Flow pembayaran lama tetap aktif: wali memilih nominal, lalu membayar melalui Snap Midtrans.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentModeForm('manual_transfer')}
+                className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
+                  paymentModeForm === 'manual_transfer'
+                    ? 'bg-blue-50 border-blue-300 text-blue-900 ring-1 ring-blue-100'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <p className="text-xs font-black uppercase tracking-widest">Transfer & Upload Bukti</p>
+                <p className="text-[11px] font-semibold mt-1 leading-relaxed">Wali melihat rekening tujuan, upload bukti, lalu admin memverifikasi sebelum tagihan lunas.</p>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Nama Bank / E-Wallet</label>
+                <input value={paymentBankName} onChange={(e) => setPaymentBankName(e.target.value)} className="w-full bg-slate-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-green-500" placeholder="Contoh: BSI" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Nomor Rekening Tujuan</label>
+                <input value={paymentAccountNumber} onChange={(e) => setPaymentAccountNumber(e.target.value)} className="w-full bg-slate-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-bold font-mono focus:outline-none focus:border-green-500" placeholder="7123456789" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Nama Pemilik Rekening</label>
+                <input value={paymentAccountName} onChange={(e) => setPaymentAccountName(e.target.value)} className="w-full bg-slate-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-green-500" placeholder="Ponpes Mathlabul Hidayah" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Instruksi yang Muncul di Dashboard Wali</label>
+              <textarea rows={3} value={paymentInstructions} onChange={(e) => setPaymentInstructions(e.target.value)} className="w-full bg-slate-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:border-green-500" placeholder="Transfer sesuai nominal, lalu unggah bukti pembayaran." />
+            </div>
+
+            <button type="submit" className="w-full md:w-auto px-5 py-3 rounded-xl bg-green-700 hover:bg-green-800 text-white text-xs font-black cursor-pointer shadow-sm active:scale-95">
+              Simpan Metode Pembayaran
+            </button>
+          </form>
+          )}
           
           {billingSubTab === 'generate' && (
           <form onSubmit={handleBulkGenerateTagihan} className="lg:col-span-5 bg-white p-6 rounded-3xl border border-gray-150 space-y-4">
@@ -5115,6 +5306,79 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               </div>
             </div>
 
+          </div>
+          )}
+
+          {billingSubTab === 'verifikasi' && (
+          <div className="lg:col-span-5 bg-white p-6 rounded-3xl border border-gray-150 shadow-sm text-left space-y-4">
+            <div className="border-b border-gray-100 pb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 select-none">
+              <div>
+                <h4 className="font-black text-gray-900 text-xs uppercase tracking-widest">Verifikasi Bukti Pembayaran Manual</h4>
+                <p className="text-[11px] text-gray-400 mt-1">Bukti transfer dari wali masuk ke sini secara realtime. Setujui untuk mengubah tagihan menjadi lunas.</p>
+              </div>
+              <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-black uppercase tracking-widest w-max">
+                {manualVerificationQueue.length} Menunggu
+              </span>
+            </div>
+
+            {manualVerificationQueue.length === 0 ? (
+              <div className="py-14 text-center text-slate-400 select-none">
+                <CheckCircle2 className="w-12 h-12 mx-auto text-green-500 opacity-60 mb-2" />
+                <p className="text-xs font-black uppercase text-slate-500">Tidak ada bukti pembayaran menunggu verifikasi.</p>
+                <p className="text-[11px] mt-1">Saat wali mengunggah bukti transfer, datanya akan tampil di laman ini.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {manualVerificationQueue.map((payment) => {
+                  const bill = getBillByPayment(payment);
+                  const santri = getSantriByBill(bill);
+                  return (
+                    <div key={payment.id} className="rounded-2xl border border-slate-150 bg-slate-50/70 p-4 grid grid-cols-1 md:grid-cols-[160px_1fr] gap-4">
+                      <a href={payment.bukti_url || '#'} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden bg-white border border-slate-200 min-h-40">
+                        {payment.bukti_url ? (
+                          <img src={payment.bukti_url} alt="Bukti pembayaran" className="w-full h-40 md:h-full object-cover" />
+                        ) : (
+                          <div className="h-40 flex items-center justify-center text-[10px] text-slate-400 font-bold">Bukti tidak tersedia</div>
+                        )}
+                      </a>
+                      <div className="space-y-3">
+                        <div>
+                          <span className="inline-flex px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-widest">Menunggu Verifikasi</span>
+                          <h5 className="text-sm font-black text-slate-900 mt-2">{santri?.nama || 'Santri Tidak Ditemukan'}</h5>
+                          <p className="text-[11px] text-slate-500 font-semibold">{bill ? `${getJenisName(bill.jenis_id)} - ${bill.bulan} ${bill.tahun}` : 'Tagihan tidak ditemukan'}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="rounded-xl bg-white border border-slate-100 p-3">
+                            <p className="text-slate-400 font-black uppercase text-[9px]">Nominal</p>
+                            <p className="font-black text-green-700 font-mono mt-1">Rp {payment.nominal.toLocaleString('id-ID')}</p>
+                          </div>
+                          <div className="rounded-xl bg-white border border-slate-100 p-3">
+                            <p className="text-slate-400 font-black uppercase text-[9px]">Waktu Kirim</p>
+                            <p className="font-bold text-slate-700 mt-1">{payment.created_at ? new Date(payment.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyManualPayment(payment.id, 'approve')}
+                            className="flex-1 py-2.5 rounded-xl bg-green-700 hover:bg-green-800 text-white text-xs font-black cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1"
+                          >
+                            <Check className="w-4 h-4" /> Setujui & Lunaskan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyManualPayment(payment.id, 'reject')}
+                            className="flex-1 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-black cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1"
+                          >
+                            <X className="w-4 h-4" /> Tolak Bukti
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           )}
 

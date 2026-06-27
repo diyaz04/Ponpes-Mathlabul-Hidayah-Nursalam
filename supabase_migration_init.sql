@@ -230,8 +230,23 @@ CREATE TABLE IF NOT EXISTS public.pembayaran (
   metode text,
   nominal numeric(12,2) NOT NULL DEFAULT 0,
   status text NOT NULL DEFAULT 'pending',
+  bukti_url text,
+  catatan text,
+  verified_at timestamptz,
+  verified_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   paid_at timestamptz,
   created_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.payment_config (
+  id text PRIMARY KEY DEFAULT 'default',
+  metode_aktif text NOT NULL DEFAULT 'midtrans' CHECK (metode_aktif IN ('midtrans','manual_transfer')),
+  bank_name text,
+  account_number text,
+  account_name text,
+  instructions text,
+  is_active boolean DEFAULT true,
   updated_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -452,6 +467,7 @@ ALTER TABLE public.jenis_pembayaran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nominal_pembayaran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tagihan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pembayaran ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifikasi ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pengumuman ENABLE ROW LEVEL SECURITY;
 
@@ -545,6 +561,9 @@ CREATE POLICY "Pembayaran inserted by relevant wali" ON public.pembayaran FOR IN
 );
 CREATE POLICY "Pembayaran fully managed by admin" ON public.pembayaran FOR ALL USING (public.get_user_role() = 'admin');
 
+CREATE POLICY "Payment config readable by authenticated" ON public.payment_config FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Payment config managed by admin only" ON public.payment_config FOR ALL USING (public.get_user_role() = 'admin') WITH CHECK (public.get_user_role() = 'admin');
+
 -- policies for notifikasi
 CREATE POLICY "Users can only select their own notifications" ON public.notifikasi FOR SELECT USING (
   user_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid()) OR
@@ -557,3 +576,15 @@ CREATE POLICY "Users can sign read status on their own notifications" ON public.
 -- policies for pengumuman
 CREATE POLICY "Pengumuman are viewable by everyone authenticated" ON public.pengumuman FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "Pengumuman are managed by admin only" ON public.pengumuman FOR ALL USING (public.get_user_role() = 'admin');
+
+INSERT INTO public.payment_config (id, metode_aktif, bank_name, account_number, account_name, instructions, is_active)
+VALUES (
+  'default',
+  'midtrans',
+  'Bank Syariah Indonesia',
+  '',
+  'Ponpes Mathlabul Hidayah Nursalam',
+  'Transfer sesuai nominal tagihan, lalu unggah bukti pembayaran dari Portal Wali.',
+  true
+)
+ON CONFLICT (id) DO NOTHING;

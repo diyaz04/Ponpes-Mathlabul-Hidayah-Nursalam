@@ -11,6 +11,7 @@ import {
   MataPelajaran,
   NilaiSantri,
   Pembayaran,
+  PaymentConfig,
   Pelanggaran,
   Pengumuman,
   Profile,
@@ -27,6 +28,16 @@ import {
 
 const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+
+export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
+  id: 'default',
+  metode_aktif: 'midtrans',
+  bank_name: 'Bank Syariah Indonesia',
+  account_number: '',
+  account_name: 'Ponpes Mathlabul Hidayah Nursalam',
+  instructions: 'Transfer sesuai nominal tagihan, lalu unggah bukti pembayaran dari Portal Wali.',
+  is_active: true
+};
 
 export const isRealSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -104,6 +115,16 @@ export const db = {
   nominalPembayaran: () => fetchTable('nominal_pembayaran'),
   tagihan: () => fetchTable<Tagihan>('tagihan'),
   pembayaran: () => fetchTable<Pembayaran>('pembayaran'),
+  paymentConfig: async () => {
+    const { data, error } = await supabase
+      .from('payment_config')
+      .select('*')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle<PaymentConfig>();
+    if (error) throw error;
+    return data || DEFAULT_PAYMENT_CONFIG;
+  },
   notifikasi: () => fetchTable<Notifikasi>('notifikasi'),
   pengumuman: () => fetchTable<Pengumuman>('pengumuman'),
   raportKelas: () => fetchTable<KelasRaport>('kelas'),
@@ -141,6 +162,7 @@ type SupabaseCache = {
   nominal_pembayaran: any[];
   tagihan: Tagihan[];
   pembayaran: Pembayaran[];
+  payment_config: PaymentConfig | null;
   notifikasi: Notifikasi[];
   pengumuman: Pengumuman[];
   kelas: KelasRaport[];
@@ -168,6 +190,7 @@ const cache: SupabaseCache = {
   nominal_pembayaran: [],
   tagihan: [],
   pembayaran: [],
+  payment_config: DEFAULT_PAYMENT_CONFIG,
   notifikasi: [],
   pengumuman: [],
   kelas: [],
@@ -196,6 +219,7 @@ export async function refreshSupabaseCache() {
     nominalPembayaran,
     tagihan,
     pembayaran,
+    paymentConfig,
     notifikasi,
     pengumuman,
     raportKelas,
@@ -221,6 +245,7 @@ export async function refreshSupabaseCache() {
     db.nominalPembayaran().catch(() => []),
     db.tagihan().catch(() => []),
     db.pembayaran().catch(() => []),
+    db.paymentConfig().catch(() => DEFAULT_PAYMENT_CONFIG),
     db.notifikasi().catch(() => []),
     db.pengumuman().catch(() => []),
     db.raportKelas().catch(() => []),
@@ -247,6 +272,7 @@ export async function refreshSupabaseCache() {
   cache.nominal_pembayaran = nominalPembayaran;
   cache.tagihan = tagihan;
   cache.pembayaran = pembayaran;
+  cache.payment_config = paymentConfig;
   cache.notifikasi = notifikasi;
   cache.pengumuman = pengumuman;
   cache.kelas = raportKelas;
@@ -316,6 +342,13 @@ export const dbLocal = {
   setTagihan: (v: Tagihan[]) => { cache.tagihan = v; replaceTable('tagihan', v); },
   getPembayaran: () => cache.pembayaran,
   setPembayaran: (v: Pembayaran[]) => { cache.pembayaran = v; upsertMany('pembayaran', v); },
+  getPaymentConfig: () => cache.payment_config || DEFAULT_PAYMENT_CONFIG,
+  setPaymentConfig: (v: PaymentConfig) => {
+    cache.payment_config = v;
+    if (isRealSupabaseConfigured) {
+      supabase.from('payment_config').upsert(v).then(({ error }) => error && console.error(error));
+    }
+  },
   getNotifikasi: () => cache.notifikasi,
   setNotifikasi: (v: Notifikasi[]) => { cache.notifikasi = v; upsertMany('notifikasi', v); },
   getPengumuman: () => cache.pengumuman,

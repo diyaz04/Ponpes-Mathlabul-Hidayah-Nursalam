@@ -193,8 +193,23 @@ CREATE TABLE IF NOT EXISTS public.pembayaran (
   metode text,
   nominal numeric(12,2) NOT NULL DEFAULT 0,
   status text NOT NULL DEFAULT 'pending',
+  bukti_url text,
+  catatan text,
+  verified_at timestamptz,
+  verified_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   paid_at timestamptz,
   created_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.payment_config (
+  id text PRIMARY KEY DEFAULT 'default',
+  metode_aktif text NOT NULL DEFAULT 'midtrans' CHECK (metode_aktif IN ('midtrans','manual_transfer')),
+  bank_name text,
+  account_number text,
+  account_name text,
+  instructions text,
+  is_active boolean DEFAULT true,
   updated_at timestamptz DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -401,6 +416,7 @@ ALTER TABLE public.jenis_pembayaran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nominal_pembayaran ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tagihan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pembayaran ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifikasi ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pengumuman ENABLE ROW LEVEL SECURITY;
 
@@ -506,6 +522,9 @@ CREATE POLICY "Wali inserts pembayaran" ON public.pembayaran FOR INSERT WITH CHE
 );
 CREATE POLICY "Admins manage pembayaran" ON public.pembayaran FOR ALL USING (public.get_user_role() = 'admin') WITH CHECK (public.get_user_role() = 'admin');
 
+CREATE POLICY "Payment config readable" ON public.payment_config FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Admins manage payment config" ON public.payment_config FOR ALL USING (public.get_user_role() = 'admin') WITH CHECK (public.get_user_role() = 'admin');
+
 CREATE POLICY "Notifikasi readable own" ON public.notifikasi FOR SELECT USING (
   user_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid()) OR public.get_user_role() = 'admin'
 );
@@ -567,6 +586,18 @@ SELECT * FROM (VALUES
 ) AS v(nama, deskripsi, is_active)
 WHERE NOT EXISTS (SELECT 1 FROM public.jenis_pembayaran);
 
+INSERT INTO public.payment_config (id, metode_aktif, bank_name, account_number, account_name, instructions, is_active)
+VALUES (
+  'default',
+  'midtrans',
+  'Bank Syariah Indonesia',
+  '',
+  'Ponpes Mathlabul Hidayah Nursalam',
+  'Transfer sesuai nominal tagihan, lalu unggah bukti pembayaran dari Portal Wali.',
+  true
+)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO public.program (nama, deskripsi, icon, urutan, is_active)
 SELECT * FROM (VALUES
   ('Tahfidzul Qur''an', 'Bimbingan hafalan Al-Qur''an terstruktur.', 'BookOpen', 1, true),
@@ -596,4 +627,3 @@ SELECT
   CURRENT_DATE,
   true
 WHERE NOT EXISTS (SELECT 1 FROM public.berita WHERE slug = 'portal-pesantren-siap-digunakan');
-

@@ -291,8 +291,23 @@ export interface Pembayaran {
   metode?: string;
   nominal: number;
   status: string;
+  bukti_url?: string;
+  catatan?: string;
+  verified_at?: string;
+  verified_by?: string;
   paid_at?: string;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface PaymentConfig {
+  id: string;
+  metode_aktif: 'midtrans' | 'manual_transfer';
+  bank_name?: string;
+  account_number?: string;
+  account_name?: string;
+  instructions?: string;
+  is_active: boolean;
   updated_at?: string;
 }
 

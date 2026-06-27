@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtime } from '../../hooks/useRealtime';
-import { dbLocal, isRealSupabaseConfigured, supabase } from '../../lib/supabase';
-import { Santri, Pelanggaran, SetoranHapalan, ProgressHapalan, Tagihan, Pembayaran, KategoriHapalan } from '../../types';
+import { DEFAULT_PAYMENT_CONFIG, dbLocal, isRealSupabaseConfigured, supabase } from '../../lib/supabase';
+import { Santri, Pelanggaran, SetoranHapalan, ProgressHapalan, Tagihan, Pembayaran, KategoriHapalan, PaymentConfig } from '../../types';
 import { PelanggaranBadge } from '../shared/PelanggaranBadge';
 import { HapalanProgressCard } from '../shared/HapalanProgressCard';
 import { MidtransButton } from '../shared/MidtransButton';
@@ -64,6 +64,9 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
   const [progress, setProgress] = useState<ProgressHapalan | null>(null);
   const [bills, setBills] = useState<Tagihan[]>([]);
   const [payments, setPayments] = useState<Pembayaran[]>([]);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(DEFAULT_PAYMENT_CONFIG);
+  const [proofDrafts, setProofDrafts] = useState<Record<string, string>>({});
+  const [submittingProofId, setSubmittingProofId] = useState<string | null>(null);
   
   // Guardian Profile, Photo & Password change states
   const [profileName, setProfileName] = useState('');
@@ -95,11 +98,12 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
   // Sync state reactively to database events
   useRealtime(() => {
     setDbTick(prev => prev + 1);
-  }, ['santri', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'progress_hapalan', 'tagihan', 'pembayaran', 'notifikasi']);
+  }, ['santri', 'pelanggaran', 'setoran_hapalan', 'kategori_hapalan', 'progress_hapalan', 'tagihan', 'pembayaran', 'payment_config', 'notifikasi']);
 
   // Load and load-bind all kids and active kid's records
   React.useEffect(() => {
     if (!user) return;
+    setPaymentConfig(dbLocal.getPaymentConfig());
     const allS = dbLocal.getSantri();
     const mine = allS.filter(s => s.wali_id === user.id);
     setMySantri(mine);
@@ -160,7 +164,7 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
 
           const { data: paymentData, error: paymentError } = await supabase
             .from('pembayaran')
-            .select('id, tagihan_id, order_id, snap_token, metode, nominal, status, paid_at, created_at, updated_at')
+            .select('*')
             .in('tagihan_id', billingIds)
             .order('created_at', { ascending: false });
 
@@ -201,6 +205,145 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
   };
 
   const currentPelanggaranSum = violations.reduce((acc, obj) => acc + (obj.status === 'aktif' ? obj.poin : 0), 0);
+  const isManualPaymentActive = paymentConfig.metode_aktif === 'manual_transfer';
+
+  const getManualPaymentForBill = (tagihanId: string) => {
+    return payments
+      .filter(p => p.tagihan_id === tagihanId && (p.metode || '').toLowerCase().includes('transfer'))
+      .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())[0];
+  };
+
+  const handleSubmitManualProof = async (bill: Tagihan) => {
+    const proofUrl = proofDrafts[bill.id];
+    if (!proofUrl) {
+      setErrorMsg('Silakan unggah bukti pembayaran terlebih dahulu.');
+      setTimeout(() => setErrorMsg(null), 4000);
+      return;
+    }
+
+    setSubmittingProofId(bill.id);
+    const now = new Date().toISOString();
+    const newPayment: Pembayaran = {
+      id: `manual-${bill.id}-${Date.now()}`,
+      tagihan_id: bill.id,
+      order_id: `MANUAL-${bill.id}-${Date.now()}`,
+      metode: 'Transfer Manual',
+      nominal: bill.nominal,
+      status: 'menunggu_verifikasi',
+      bukti_url: proofUrl,
+      catatan: 'Bukti pembayaran dikirim wali santri.',
+      created_at: now,
+      updated_at: now
+    };
+
+    try {
+      if (isRealSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('pembayaran')
+          .insert({
+            tagihan_id: bill.id,
+            order_id: newPayment.order_id,
+            metode: newPayment.metode,
+            nominal: newPayment.nominal,
+            status: newPayment.status,
+            bukti_url: newPayment.bukti_url,
+            catatan: newPayment.catatan
+          })
+          .select('*')
+          .single<Pembayaran>();
+
+        if (error) throw error;
+        if (data) {
+          setPayments(prev => [data, ...prev.filter(p => p.id !== data.id)]);
+        }
+      } else {
+        const nextPayments = [newPayment, ...payments];
+        setPayments(nextPayments);
+        dbLocal.setPembayaran(nextPayments);
+      }
+
+      setProofDrafts(prev => ({ ...prev, [bill.id]: '' }));
+      setSuccessMsg('Bukti pembayaran terkirim. Status tagihan menunggu verifikasi admin.');
+      setDbTick(prev => prev + 1);
+      setTimeout(() => setSuccessMsg(null), 5000);
+    } catch (err: any) {
+      setErrorMsg(`Gagal mengirim bukti pembayaran: ${err.message || err}`);
+      setTimeout(() => setErrorMsg(null), 5000);
+    } finally {
+      setSubmittingProofId(null);
+    }
+  };
+
+  const renderManualPaymentBox = (bill: Tagihan, compact = false) => {
+    const manualPayment = getManualPaymentForBill(bill.id);
+    const proofUrl = proofDrafts[bill.id] || '';
+
+    if (manualPayment?.status === 'menunggu_verifikasi') {
+      return (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-800">Menunggu Verifikasi Admin</p>
+          <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">
+            Bukti pembayaran sudah terkirim. Status tagihan akan berubah otomatis setelah admin menyetujui.
+          </p>
+          {manualPayment.bukti_url && (
+            <a href={manualPayment.bukti_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[10px] font-black text-amber-900 underline">
+              Lihat bukti terkirim
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className={`mt-4 rounded-2xl border border-green-100 bg-white p-4 text-left shadow-sm ${compact ? 'min-w-[260px]' : ''}`}>
+        <div className="rounded-xl bg-green-50 border border-green-100 p-3 mb-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-green-800">Transfer ke Rekening Tujuan</p>
+          <p className="text-sm font-black text-slate-900 mt-1">{paymentConfig.bank_name || 'Bank Tujuan Belum Diatur'}</p>
+          <p className="text-xl font-black text-green-800 font-mono leading-tight mt-1">{paymentConfig.account_number || '-'}</p>
+          <p className="text-[11px] font-bold text-slate-500 mt-1">a.n. {paymentConfig.account_name || '-'}</p>
+          {paymentConfig.instructions && (
+            <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">{paymentConfig.instructions}</p>
+          )}
+        </div>
+
+        {manualPayment?.status === 'gagal' && (
+          <div className="mb-3 rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-bold text-red-700">
+            Bukti sebelumnya ditolak admin. Silakan unggah bukti pembayaran yang benar.
+          </div>
+        )}
+
+        <ImageUploader
+          label="Unggah Bukti Pembayaran"
+          currentImageUrl={proofUrl}
+          onUploadSuccess={(url) => setProofDrafts(prev => ({ ...prev, [bill.id]: url }))}
+          onClear={() => setProofDrafts(prev => ({ ...prev, [bill.id]: '' }))}
+          maxSizeMB={5}
+        />
+        <button
+          type="button"
+          onClick={() => handleSubmitManualProof(bill)}
+          disabled={!proofUrl || submittingProofId === bill.id}
+          className="mt-3 w-full py-2.5 bg-green-700 hover:bg-green-800 text-white font-black rounded-xl text-xs cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {submittingProofId === bill.id ? 'Mengirim Bukti...' : 'Kirim Bukti & Tunggu Verifikasi'}
+        </button>
+      </div>
+    );
+  };
+
+  const renderPaymentAction = (bill: Tagihan, compact = false) => {
+    if (isManualPaymentActive) {
+      return renderManualPaymentBox(bill, compact);
+    }
+
+    return (
+      <MidtransButton
+        tagihan={bill}
+        studentName={selectedSantri?.nama || 'Santri'}
+        onPaymentSuccess={() => setDbTick(prev => prev + 1)}
+      />
+    );
+  };
 
   // Format charts representation
   const chartData = [
@@ -691,11 +834,7 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
                             <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Tagihan SPP ({pendingBill.bulan})</p>
                             <h4 className="text-2xl font-black text-gray-900 leading-none">Rp {pendingBill.nominal.toLocaleString('id-ID')}</h4>
                             <p className="text-[10px] text-zinc-500 mt-2 font-medium">Batas bayar akhir bulan ini. Bayar via QRIS otomatis.</p>
-                            <MidtransButton 
-                              tagihan={pendingBill}
-                              studentName={selectedSantri.nama}
-                              onPaymentSuccess={() => setDbTick(prev => prev + 1)}
-                            />
+                            {renderPaymentAction(pendingBill, true)}
                           </>
                         ) : (
                           <>
@@ -1109,11 +1248,7 @@ export function UserDashboard({ activeTab: parentActiveTab, onTabChange }: UserD
                           <span className="font-black text-slate-800 text-md font-mono">Rp {bill.nominal.toLocaleString('id-ID')}</span>
                         </div>
                         <div className="min-w-36 shrink-0 print:hidden">
-                          <MidtransButton 
-                            tagihan={bill} 
-                            studentName={selectedSantri.nama} 
-                            onPaymentSuccess={() => setDbTick(prev => prev + 1)}
-                          />
+                          {renderPaymentAction(bill, true)}
                         </div>
                       </div>
                     </div>
