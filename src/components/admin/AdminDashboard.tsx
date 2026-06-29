@@ -190,6 +190,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [pJK, setPJK] = useState<'L' | 'P'>('L');
   const [pBirth, setPBirth] = useState('2011-04-12');
   const [pAlamat, setPAlamat] = useState('');
+  const [pDesaKelurahan, setPDesaKelurahan] = useState('');
+  const [pKecamatan, setPKecamatan] = useState('');
+  const [pKabupatenKota, setPKabupatenKota] = useState('');
+  const [pProvinsi, setPProvinsi] = useState('');
+  const [pNik, setPNik] = useState('');
+  const [pKk, setPKk] = useState('');
+  const [pNamaAyah, setPNamaAyah] = useState('');
+  const [pNamaIbu, setPNamaIbu] = useState('');
+  const [pPekerjaanAyah, setPPekerjaanAyah] = useState('');
+  const [pPekerjaanIbu, setPPekerjaanIbu] = useState('');
   const [pWaliId, setPWaliId] = useState('p-wali1');
   const [pBulanMasuk, setPBulanMasuk] = useState('Januari');
   const [pTahunMasuk, setPTahunMasuk] = useState('2026');
@@ -255,6 +265,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [psbStatusFilter, setPsbStatusFilter] = useState<'semua' | PSBPendaftar['status']>('semua');
   const [psbDetail, setPsbDetail] = useState<PSBPendaftar | null>(null);
   const [psbAdminNote, setPsbAdminNote] = useState('');
+  const [psbVerifyNis, setPsbVerifyNis] = useState('');
+  const [psbVerifyKamar, setPsbVerifyKamar] = useState('');
   const [psbTahunAjaran, setPsbTahunAjaran] = useState('2026/2027');
   const [psbTanggalBuka, setPsbTanggalBuka] = useState('2026-06-01');
   const [psbTanggalTutup, setPsbTanggalTutup] = useState('2026-07-31');
@@ -767,6 +779,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setPJK(s.jenis_kelamin);
       setPBirth(s.tanggal_lahir);
       setPAlamat(s.alamat || '');
+      setPDesaKelurahan(s.desa_kelurahan || '');
+      setPKecamatan(s.kecamatan || '');
+      setPKabupatenKota(s.kabupaten_kota || '');
+      setPProvinsi(s.provinsi || '');
+      setPNik(s.nik || '');
+      setPKk(s.kk || '');
+      setPNamaAyah(s.nama_ayah || '');
+      setPNamaIbu(s.nama_ibu || '');
+      setPPekerjaanAyah(s.pekerjaan_ayah || '');
+      setPPekerjaanIbu(s.pekerjaan_ibu || '');
       setPWaliId(s.wali_id || 'p-wali1');
       setPBulanMasuk(s.bulan_masuk || 'Januari');
       setPTahunMasuk(s.tahun_masuk || '2026');
@@ -781,6 +803,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       setPJK('L');
       setPBirth('2011-04-12');
       setPAlamat('');
+      setPDesaKelurahan('');
+      setPKecamatan('');
+      setPKabupatenKota('');
+      setPProvinsi('');
+      setPNik('');
+      setPKk('');
+      setPNamaAyah('');
+      setPNamaIbu('');
+      setPPekerjaanAyah('');
+      setPPekerjaanIbu('');
       setPWaliId('__buat_baru__'); // Default to create new parent automagically
       setPBulanMasuk('Januari');
       setPTahunMasuk('2026');
@@ -933,6 +965,9 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     santri: {
       nis: string; nama: string; kelas: string; kamar?: string;
       jenis_kelamin: string; tanggal_lahir: string; alamat?: string;
+      desa_kelurahan?: string; kecamatan?: string; kabupaten_kota?: string; provinsi?: string;
+      nik?: string; kk?: string; nama_ayah?: string; nama_ibu?: string;
+      pekerjaan_ayah?: string; pekerjaan_ibu?: string;
       tahun_masuk: string; bulan_masuk?: string;
     },
     wali: { full_name: string; email: string; phone?: string; password: string },
@@ -961,6 +996,9 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     santri: {
       nis: string; nama: string; kelas: string; kamar?: string;
       jenis_kelamin: string; tanggal_lahir: string; alamat?: string;
+      desa_kelurahan?: string; kecamatan?: string; kabupaten_kota?: string; provinsi?: string;
+      nik?: string; kk?: string; nama_ayah?: string; nama_ibu?: string;
+      pekerjaan_ayah?: string; pekerjaan_ibu?: string;
       tahun_masuk: string; bulan_masuk?: string;
     },
     wali: { full_name: string; email: string; phone?: string; password: string },
@@ -1063,7 +1101,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     doc.setFillColor(...WHITE);
     doc.setDrawColor(...GREEN_LIGHT);
     doc.setLineWidth(0.4);
-    doc.roundedRect(14, y, W - 28, 74, 3, 3, 'FD');
+    doc.roundedRect(14, y, W - 28, 88, 3, 3, 'FD');
     drawSectionTitle('DATA DIRI SANTRI', y - 1);
     y += 11;
 
@@ -1363,10 +1401,51 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const handleSavePupil = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalWaliId = pWaliId;
+    const inferredWaliName = newWaliFullName || pNamaAyah || pNamaIbu || `Wali dari ${pNama}`;
+    const normalizedWaliPhone = newWaliPhone.replace(/[^\d]/g, '') || String(Date.now());
+    const waliAuthEmail = newWaliEmail.trim().toLowerCase() || `${normalizedWaliPhone}@wali.local`;
+    const santriPayload = {
+      nis: pNis,
+      nama: pNama,
+      kelas: pKelas,
+      kamar: pKamar || null,
+      jenis_kelamin: pJK,
+      tanggal_lahir: pBirth,
+      alamat: pAlamat || null,
+      desa_kelurahan: pDesaKelurahan || null,
+      kecamatan: pKecamatan || null,
+      kabupaten_kota: pKabupatenKota || null,
+      provinsi: pProvinsi || null,
+      nik: pNik || null,
+      kk: pKk || null,
+      nama_ayah: pNamaAyah || null,
+      nama_ibu: pNamaIbu || null,
+      pekerjaan_ayah: pPekerjaanAyah || null,
+      pekerjaan_ibu: pPekerjaanIbu || null,
+      foto_url: pFotoUrl || null,
+      status: pStatus,
+      tahun_masuk: pTahunMasuk,
+      bulan_masuk: pBulanMasuk
+    };
+    const biodataSantri = {
+      ...santriPayload,
+      kamar: pKamar,
+      alamat: pAlamat,
+      desa_kelurahan: pDesaKelurahan,
+      kecamatan: pKecamatan,
+      kabupaten_kota: pKabupatenKota,
+      provinsi: pProvinsi,
+      nik: pNik,
+      kk: pKk,
+      nama_ayah: pNamaAyah,
+      nama_ibu: pNamaIbu,
+      pekerjaan_ayah: pPekerjaanAyah,
+      pekerjaan_ibu: pPekerjaanIbu
+    };
 
     try {
-      if (pWaliId === '__buat_baru__' && !newWaliEmail.trim()) {
-        alert('Email wali wajib diisi agar akun Supabase Auth dapat dibuat.');
+      if (pWaliId === '__buat_baru__' && !newWaliPhone.trim()) {
+        alert('No HP wali wajib diisi untuk akun login wali.');
         return;
       }
 
@@ -1380,24 +1459,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           },
           body: JSON.stringify({
             wali: {
-              full_name: newWaliFullName || `Wali dari ${pNama}`,
+              full_name: inferredWaliName,
               phone: newWaliPhone,
-              email: newWaliEmail.trim().toLowerCase(),
+              email: waliAuthEmail,
               password: newWaliPassword || '123456'
             },
-            santri: {
-              nis: pNis,
-              nama: pNama,
-              kelas: pKelas,
-              kamar: pKamar,
-              jenis_kelamin: pJK,
-            tanggal_lahir: pBirth,
-            alamat: pAlamat,
-              foto_url: pFotoUrl || null,
-              status: pStatus,
-              tahun_masuk: pTahunMasuk,
-              bulan_masuk: pBulanMasuk
-            }
+            santri: santriPayload
           })
         });
 
@@ -1408,18 +1475,12 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
         // 🖨️ Auto-generate biodata PDF
         generateBiodataPDF(
-          { nis: pNis, nama: pNama, kelas: pKelas, kamar: pKamar, jenis_kelamin: pJK,
-            tanggal_lahir: pBirth, alamat: pAlamat, tahun_masuk: pTahunMasuk, bulan_masuk: pBulanMasuk },
-          { full_name: newWaliFullName || `Wali dari ${pNama}`, email: newWaliEmail.trim().toLowerCase(),
-            phone: newWaliPhone, password: newWaliPassword || '123456' },
+          biodataSantri,
+          { full_name: inferredWaliName, email: waliAuthEmail, phone: newWaliPhone, password: newWaliPassword || '123456' },
           profilPP
         );
 
         setActionDoneMsg('✅ Santri didaftarkan! Akun wali dibuat & biodata PDF otomatis terunduh.');
-        await refreshAdminData();
-        setTimeout(() => setActionDoneMsg(null), 5000);
-        setShowPupilModal(false);
-        return;
         await refreshAdminData();
         setTimeout(() => setActionDoneMsg(null), 5000);
         setShowPupilModal(false);
@@ -1430,36 +1491,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         const { error } = await supabase
           .from('santri')
           .update({
-            nis: pNis,
-            nama: pNama,
-            kelas: pKelas,
-            kamar: pKamar || null,
-            jenis_kelamin: pJK,
-            tanggal_lahir: pBirth,
-            alamat: pAlamat || null,
-            foto_url: pFotoUrl || null,
+            ...santriPayload,
             wali_id: finalWaliId === '__buat_baru__' ? null : finalWaliId,
-            status: pStatus,
-            bulan_masuk: pBulanMasuk,
-            tahun_masuk: pTahunMasuk
           })
           .eq('id', pupilId);
         if (error) throw error;
         setActionDoneMsg('Data santri berhasil diperbaharui!');
       } else {
         const { error } = await supabase.from('santri').insert({
-          nis: pNis,
-          nama: pNama,
-          kelas: pKelas,
-          kamar: pKamar || null,
-          jenis_kelamin: pJK,
-          tanggal_lahir: pBirth,
-          alamat: pAlamat || null,
-          foto_url: pFotoUrl || null,
+          ...santriPayload,
           wali_id: finalWaliId,
-          status: pStatus,
-          tahun_masuk: pTahunMasuk,
-          bulan_masuk: pBulanMasuk
         });
         if (error) throw error;
 
@@ -1467,8 +1508,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
         const existingWali = profilesList.find(p => p.id === finalWaliId);
         if (existingWali) {
           generateBiodataPDF(
-            { nis: pNis, nama: pNama, kelas: pKelas, kamar: pKamar, jenis_kelamin: pJK,
-              tanggal_lahir: pBirth, alamat: pAlamat, tahun_masuk: pTahunMasuk, bulan_masuk: pBulanMasuk },
+            biodataSantri,
             { full_name: existingWali.full_name, email: existingWali.email || '-',
               phone: existingWali.phone, password: '(gunakan password yang sudah ada)' },
             profilPP
@@ -1719,10 +1759,19 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       'Kamar', 
       'Jenis Kelamin (L/P)', 
       'Tanggal Lahir (YYYY-MM-DD)', 
-      'Alamat', 
+      'Alamat (Kampung/Jalan)',
+      'Desa/Kelurahan',
+      'Kecamatan',
+      'Kabupaten/Kota',
+      'Provinsi',
       'Bulan Masuk', 
       'Tahun Masuk', 
-      'Nama Wali (Orang Tua)', 
+      'NIK',
+      'KK',
+      'Nama Ayah',
+      'Nama Ibu',
+      'Pekerjaan Ayah',
+      'Pekerjaan Ibu',
       'No HP Wali (Login)', 
       'Email Wali (Opsional)', 
       'Password Wali (Login)'
@@ -1730,11 +1779,15 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
     const sample1 = [
       '10001', 'Zaidan Al-Fatih', 'IX - Tahfidz A', 'Abu Bakar Shiddiq', 'L', '2011-05-15', 
-      'Jl. Sukajadi No. 45 Bandung', 'Januari', '2026', 'Bpk. Kurnia', '081234567890', 'kurnia@gmail.com', 'wali123'
+      'Kp. Sukajadi RT 01/RW 02', 'Sukamaju', 'Cigalontang', 'Tasikmalaya', 'Jawa Barat',
+      'Januari', '2026', '3201234567890001', '3201234567890000', 'Bpk. Kurnia', 'Ibu Aminah',
+      'Petani', 'Ibu Rumah Tangga', '081234567890', 'kurnia@gmail.com', 'wali123'
     ];
     const sample2 = [
       '10002', 'Fatimah Az-Zahra', 'VIII - Reguler B', 'Aisyah Binti Abu Bakar', 'P', '2012-08-20', 
-      'Jl. Kebon Jeruk No. 12 Jakarta', 'Januari', '2026', 'Ibu Aminah', '085698765432', 'aminah@gmail.com', 'wali456'
+      'Jl. Kebon Jeruk No. 12', 'Kebon Jeruk', 'Kebon Jeruk', 'Jakarta Barat', 'DKI Jakarta',
+      'Januari', '2026', '3174012345670002', '3174012345670000', 'Bpk. Abdullah', 'Ibu Aminah',
+      'Wiraswasta', 'Guru', '085698765432', 'aminah@gmail.com', 'wali456'
     ];
 
     const data = [headers, sample1, sample2];
@@ -1836,10 +1889,20 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           const kamar = getFieldValFromRow(rowObj, ['kamar', 'asrama']);
           const jk = getFieldValFromRow(rowObj, ['jeniskelamin', 'gender', 'jk', 'kelamin']);
           const birth = excelSerialToDate(getFieldValFromRow(rowObj, ['tanggallahir', 'tgllahir', 'lahir']) || '2011-01-01');
-          const alamat = getFieldValFromRow(rowObj, ['alamat', 'domisili']);
+          const alamat = getFieldValFromRow(rowObj, ['alamatkampungjalan', 'alamat', 'domisili']);
+          const desaKelurahan = getFieldValFromRow(rowObj, ['desakelurahan', 'desa', 'kelurahan']);
+          const kecamatan = getFieldValFromRow(rowObj, ['kecamatan']);
+          const kabupatenKota = getFieldValFromRow(rowObj, ['kabupatenkota', 'kabupaten', 'kota']);
+          const provinsi = getFieldValFromRow(rowObj, ['provinsi']);
           const bulanMasuk = getFieldValFromRow(rowObj, ['bulanmasuk', 'bulan']);
           const tahunMasuk = getFieldValFromRow(rowObj, ['tahunmasuk', 'tahun']);
-          const waliNama = getFieldValFromRow(rowObj, ['namawali', 'orangtua', 'namaortu', 'wali']);
+          const nik = getFieldValFromRow(rowObj, ['nik']);
+          const kk = getFieldValFromRow(rowObj, ['kk', 'kartukeluarga']);
+          const namaAyah = getFieldValFromRow(rowObj, ['namaayah', 'ayah']);
+          const namaIbu = getFieldValFromRow(rowObj, ['namaibu', 'ibu']);
+          const pekerjaanAyah = getFieldValFromRow(rowObj, ['pekerjaanayah']);
+          const pekerjaanIbu = getFieldValFromRow(rowObj, ['pekerjaanibu']);
+          const waliNama = getFieldValFromRow(rowObj, ['namawali', 'orangtua', 'namaortu', 'wali']) || namaAyah || namaIbu;
           const waliPhone = getFieldValFromRow(rowObj, ['nohpwali', 'teleponwali', 'hpwali', 'nohp', 'telepon', 'whatsapp', 'wa', 'phone']);
           const waliEmail = getFieldValFromRow(rowObj, ['emailwali', 'emailortu', 'email']);
           const waliPassword = getFieldValFromRow(rowObj, ['passwordwali', 'password', 'pass']);
@@ -1856,8 +1919,18 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             jk: (jk && jk.toUpperCase().startsWith('P')) ? 'P' : 'L',
             birth: birth,
             alamat: alamat || '',
+            desaKelurahan: desaKelurahan || '',
+            kecamatan: kecamatan || '',
+            kabupatenKota: kabupatenKota || '',
+            provinsi: provinsi || '',
             bulanMasuk: bulanMasuk || 'Januari',
             tahunMasuk: tahunMasuk || '2026',
+            nik: nik || '',
+            kk: kk || '',
+            namaAyah: namaAyah || '',
+            namaIbu: namaIbu || '',
+            pekerjaanAyah: pekerjaanAyah || '',
+            pekerjaanIbu: pekerjaanIbu || '',
             waliNama: waliNama || `Wali ${nama}`,
             waliPhone: waliPhone || `0851${Math.floor(10000000 + Math.random() * 90000000)}`,
             waliEmail: waliEmail || `${nama.toLowerCase().replace(/\s+/g, '')}@pesantren.com`,
@@ -1922,6 +1995,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   jenis_kelamin: row.jk,
                   tanggal_lahir: row.birth,
                   alamat: row.alamat || null,
+                  desa_kelurahan: row.desaKelurahan || null,
+                  kecamatan: row.kecamatan || null,
+                  kabupaten_kota: row.kabupatenKota || null,
+                  provinsi: row.provinsi || null,
+                  nik: row.nik || null,
+                  kk: row.kk || null,
+                  nama_ayah: row.namaAyah || null,
+                  nama_ibu: row.namaIbu || null,
+                  pekerjaan_ayah: row.pekerjaanAyah || null,
+                  pekerjaan_ibu: row.pekerjaanIbu || null,
                   status: 'aktif',
                   tahun_masuk: row.tahunMasuk,
                   bulan_masuk: row.bulanMasuk
@@ -1947,6 +2030,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     jenis_kelamin: row.jk,
                     tanggal_lahir: row.birth,
                     alamat: row.alamat || null,
+                    desa_kelurahan: row.desaKelurahan || null,
+                    kecamatan: row.kecamatan || null,
+                    kabupaten_kota: row.kabupatenKota || null,
+                    provinsi: row.provinsi || null,
+                    nik: row.nik || null,
+                    kk: row.kk || null,
+                    nama_ayah: row.namaAyah || null,
+                    nama_ibu: row.namaIbu || null,
+                    pekerjaan_ayah: row.pekerjaanAyah || null,
+                    pekerjaan_ibu: row.pekerjaanIbu || null,
                     wali_id: existingWali.id,
                     status: 'aktif',
                     tahun_masuk: row.tahunMasuk,
@@ -3397,10 +3490,16 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       return [
         row.nomor_pendaftaran,
         row.nama_lengkap,
+        row.nis,
         row.nisn,
+        row.nik,
+        row.kk,
         row.jenjang,
         row.nama_wali,
-        row.no_whatsapp
+        row.no_whatsapp,
+        row.desa_kelurahan,
+        row.kecamatan,
+        row.kabupaten_kota
       ].filter(Boolean).join(' ').toLowerCase().includes(query);
     })
     .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
@@ -3442,8 +3541,15 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
 
   const handleUpdatePsbStatus = async (row: PSBPendaftar, status: PSBPendaftar['status']) => {
     try {
+      if (status === 'terverifikasi' && !psbVerifyNis.trim()) {
+        setActionDoneMsg('Isi NIS santri terlebih dahulu sebelum verifikasi pendaftar.');
+        setTimeout(() => setActionDoneMsg(null), 4000);
+        return;
+      }
       const updated = await dbLocal.updatePSBPendaftar(row.id, {
         status,
+        nis: psbVerifyNis.trim() || row.nis,
+        kamar: psbVerifyKamar.trim() || row.kamar,
         catatan_admin: psbAdminNote,
         verified_at: status === 'terverifikasi' ? new Date().toISOString() : row.verified_at
       });
@@ -3459,6 +3565,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const handleOpenPsbDetail = (row: PSBPendaftar) => {
     setPsbDetail(row);
     setPsbAdminNote(row.catatan_admin || '');
+    setPsbVerifyNis(row.nis || '');
+    setPsbVerifyKamar(row.kamar || '');
   };
 
   const handleDeletePsbPendaftar = (row: PSBPendaftar) => {
@@ -3484,20 +3592,34 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       No: index + 1,
       'Nomor Pendaftaran': row.nomor_pendaftaran,
       'Nama Lengkap': row.nama_lengkap,
+      NIS: row.nis || '',
       NISN: row.nisn || '',
       'Jenis Kelamin': row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
       'Tempat Lahir': row.tempat_lahir || '',
       'Tanggal Lahir': row.tanggal_lahir || '',
-      Jenjang: row.jenjang,
+      Kelas: row.jenjang,
+      Kamar: row.kamar || '',
       Program: row.program_pilihan || '',
       'Asal Sekolah': row.asal_sekolah || '',
-      Alamat: row.alamat || '',
-      Ayah: row.nama_ayah || '',
-      Ibu: row.nama_ibu || '',
+      'Alamat (Kampung/Jalan)': row.alamat || '',
+      'Desa/Kelurahan': row.desa_kelurahan || '',
+      Kecamatan: row.kecamatan || '',
+      'Kabupaten/Kota': row.kabupaten_kota || '',
+      Provinsi: row.provinsi || '',
+      'Bulan Masuk': row.bulan_masuk || '',
+      'Tahun Masuk': row.tahun_masuk || '',
+      NIK: row.nik || '',
+      KK: row.kk || '',
+      'Nama Ayah': row.nama_ayah || '',
+      'Nama Ibu': row.nama_ibu || '',
+      'Pekerjaan Ayah': row.pekerjaan_ayah || '',
+      'Pekerjaan Ibu': row.pekerjaan_ibu || '',
       Wali: row.nama_wali,
       'Pekerjaan Wali': row.pekerjaan_wali || '',
       WhatsApp: row.no_whatsapp,
       Email: row.email || '',
+      'File KTP Ortu': row.ktp_ortu_url || '',
+      'File KK': row.kk_url || '',
       Status: row.status,
       'Catatan Admin': row.catatan_admin || '',
       'Tanggal Daftar': row.created_at ? new Date(row.created_at).toLocaleString('id-ID') : ''
@@ -3700,7 +3822,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   <span className="font-extrabold text-[10px] text-slate-800 uppercase tracking-wider block">Panduan Penggunaan Template:</span>
                   <ul className="list-disc pl-4 space-y-1 text-[10.5px]">
                     <li>Unduh template menggunakan tombol <strong className="text-green-850 font-extrabold">Unduh Template Excel</strong> di atas.</li>
-                    <li>Isian kolom <strong className="text-slate-850 font-bold">NIS, Nama Santri, Kelas, Nama Wali, dan No HP Wali</strong> wajib diisi secara lengkap dalam format lembar kerja Excel (.xlsx).</li>
+                    <li>Isian kolom <strong className="text-slate-850 font-bold">NIS, Nama Santri, Kelas, dan No HP Wali</strong> wajib diisi. Nama akun wali otomatis memakai Nama Ayah/Ibu bila kolom Nama Wali tidak tersedia.</li>
                     <li>Sistem akan mendeteksi apabila <strong className="text-slate-855 font-bold">No HP Wali</strong> sudah pernah terdaftar, lalu otomatis mengaitkan santri tersebut tanpa menduplikasi berkas akun wali (berguna untuk saudara sekandung).</li>
                     <li>Kolom <strong className="text-slate-850 font-bold">Jenis Kelamin</strong> diisi <code className="bg-slate-100 px-1 py-0.5 font-mono text-[9.5px]">L</code> untuk Laki-laki & <code className="bg-slate-100 px-1 py-0.5 font-mono text-[9.5px]">P</code> untuk Perempuan.</li>
                   </ul>
@@ -4894,8 +5016,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                       {filteredPsbPendaftar.map((row) => (
                         <tr key={row.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-black text-slate-800">{row.nomor_pendaftaran}</td>
-                          <td className="px-4 py-3"><p className="font-black text-slate-800 uppercase">{row.nama_lengkap}</p><p className="text-[10px] text-slate-400 font-semibold">NISN: {row.nisn || '-'} - {row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</p></td>
-                          <td className="px-4 py-3 font-bold text-slate-600">{row.jenjang}</td>
+                          <td className="px-4 py-3"><p className="font-black text-slate-800 uppercase">{row.nama_lengkap}</p><p className="text-[10px] text-slate-400 font-semibold">NIS: {row.nis || '-'} - {row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</p></td>
+                          <td className="px-4 py-3 font-bold text-slate-600">{row.jenjang}{row.kamar ? ` / ${row.kamar}` : ''}</td>
                           <td className="px-4 py-3"><p className="font-bold text-slate-700">{row.nama_wali}</p><p className="text-[10px] text-slate-400">{row.no_whatsapp}</p></td>
                           <td className="px-4 py-3"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${row.status === 'terverifikasi' ? 'bg-emerald-100 text-emerald-800' : row.status === 'ditolak' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{row.status}</span></td>
                           <td className="px-4 py-3 text-right"><button type="button" onClick={() => handleOpenPsbDetail(row)} className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-green-800 text-white text-[10px] font-black cursor-pointer inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Detail</button></td>
@@ -4920,9 +5042,23 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             </div>
             <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
               {[
-                ['NISN', psbDetail.nisn || '-'], ['Jenis Kelamin', psbDetail.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'], ['Tempat/Tanggal Lahir', `${psbDetail.tempat_lahir || '-'} / ${psbDetail.tanggal_lahir || '-'}`], ['Asal Sekolah', psbDetail.asal_sekolah || '-'], ['Alamat', psbDetail.alamat || '-'], ['Nama Ayah', psbDetail.nama_ayah || '-'], ['Nama Ibu', psbDetail.nama_ibu || '-'], ['Nama Wali', psbDetail.nama_wali], ['Pekerjaan Wali', psbDetail.pekerjaan_wali || '-'], ['No WhatsApp', psbDetail.no_whatsapp], ['Email', psbDetail.email || '-'], ['Tanggal Daftar', psbDetail.created_at ? new Date(psbDetail.created_at).toLocaleString('id-ID') : '-']
+                ['NIS', psbDetail.nis || '-'], ['NISN', psbDetail.nisn || '-'], ['Jenis Kelamin', psbDetail.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'], ['Tempat/Tanggal Lahir', `${psbDetail.tempat_lahir || '-'} / ${psbDetail.tanggal_lahir || '-'}`], ['Kelas/Kamar', `${psbDetail.jenjang || '-'} / ${psbDetail.kamar || '-'}`], ['Masuk Pondok', `${psbDetail.bulan_masuk || '-'} ${psbDetail.tahun_masuk || '-'}`], ['NIK', psbDetail.nik || '-'], ['KK', psbDetail.kk || '-'], ['Alamat', [psbDetail.alamat, psbDetail.desa_kelurahan, psbDetail.kecamatan, psbDetail.kabupaten_kota, psbDetail.provinsi].filter(Boolean).join(', ') || '-'], ['Asal Sekolah', psbDetail.asal_sekolah || '-'], ['Nama Ayah', psbDetail.nama_ayah || '-'], ['Nama Ibu', psbDetail.nama_ibu || '-'], ['Pekerjaan Ayah', psbDetail.pekerjaan_ayah || '-'], ['Pekerjaan Ibu', psbDetail.pekerjaan_ibu || '-'], ['Nama Wali', psbDetail.nama_wali], ['No WhatsApp', psbDetail.no_whatsapp], ['Email', psbDetail.email || '-'], ['Tanggal Daftar', psbDetail.created_at ? new Date(psbDetail.created_at).toLocaleString('id-ID') : '-']
               ].map(([label, value]) => <div key={label} className="rounded-2xl bg-slate-50 border border-slate-150 p-4"><p className="text-[10px] font-black uppercase text-slate-400">{label}</p><p className="text-sm font-bold text-slate-800 mt-1">{value}</p></div>)}
+              <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a href={psbDetail.ktp_ortu_url || '#'} target="_blank" rel="noreferrer" className={`rounded-2xl border p-4 text-sm font-black ${psbDetail.ktp_ortu_url ? 'bg-emerald-50 border-emerald-100 text-emerald-800 hover:bg-emerald-100' : 'bg-slate-50 border-slate-150 text-slate-300 pointer-events-none'}`}>Lihat File KTP Ortu</a>
+                <a href={psbDetail.kk_url || '#'} target="_blank" rel="noreferrer" className={`rounded-2xl border p-4 text-sm font-black ${psbDetail.kk_url ? 'bg-emerald-50 border-emerald-100 text-emerald-800 hover:bg-emerald-100' : 'bg-slate-50 border-slate-150 text-slate-300 pointer-events-none'}`}>Lihat File KK</a>
+              </div>
               <div className="lg:col-span-2 rounded-2xl bg-slate-50 border border-slate-150 p-4"><p className="text-[10px] font-black uppercase text-slate-400">Catatan Pendaftar</p><p className="text-sm font-semibold text-slate-700 mt-1">{psbDetail.catatan || '-'}</p></div>
+              <div className="lg:col-span-2 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-emerald-800 block mb-1">NIS Santri (Diisi Admin):</label>
+                  <input type="text" value={psbVerifyNis} onChange={(e) => setPsbVerifyNis(e.target.value)} placeholder="Contoh: 10001" className="w-full bg-white border border-emerald-200 rounded-xl px-3 py-2.5 text-xs font-bold font-mono focus:outline-none focus:border-emerald-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-emerald-800 block mb-1">Kamar Santri (Diisi Admin):</label>
+                  <input type="text" value={psbVerifyKamar} onChange={(e) => setPsbVerifyKamar(e.target.value)} placeholder="Contoh: Abu Bakar Shiddiq" className="w-full bg-white border border-emerald-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-emerald-500" />
+                </div>
+              </div>
               <div className="lg:col-span-2"><label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Catatan Admin / Verifikasi:</label><textarea rows={3} value={psbAdminNote} onChange={(e) => setPsbAdminNote(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:border-green-500" /></div>
             </div>
             <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-3">
@@ -7480,7 +7616,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
       {/* Pupil Edit/Create Modal (Surgical Drawer) */}
       {showPupilModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-51 select-none">
-          <form onSubmit={handleSavePupil} className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-150 leading-normal text-left flex flex-col max-h-[90vh]">
+          <form onSubmit={handleSavePupil} className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-gray-150 leading-normal text-left flex flex-col max-h-[90vh]">
           <div className="p-6 pb-0 flex-shrink-0">
             <h3 className="font-extrabold text-gray-950 text-sm uppercase tracking-wide">
               {pupilId ? 'Koreksi Berkas Santri' : 'Register Berkas Santri'}
@@ -7527,15 +7663,14 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Kelas Binaan:</label>
-                <select 
+                <input
+                  type="text"
                   value={pKelas}
                   onChange={(e) => setPKelas(e.target.value)}
                   className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold"
-                >
-                  <option value="IX - Tahfidz A">IX - Tahfidz A</option>
-                  <option value="VIII - Reguler B">VIII - Reguler B</option>
-                  <option value="VII - Persiapan">VII - Persiapan</option>
-                </select>
+                  placeholder="Contoh: IX - Tahfidz A"
+                  required
+                />
               </div>
               <div>
                 <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Nama Kamar Asrama:</label>
@@ -7595,14 +7730,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 </div>
                 
                 <div>
-                  <label className="text-[9px] font-black uppercase text-green-800 block mb-1">Nama Lengkap Orang Tua / Wali:</label>
+                  <label className="text-[9px] font-black uppercase text-green-800 block mb-1">Nama Wali Akun (Opsional):</label>
                   <input
                     type="text"
                     value={newWaliFullName}
                     onChange={(e) => setNewWaliFullName(e.target.value)}
-                    placeholder="Contoh: Bpk. Hidayatullah"
+                    placeholder="Kosongkan untuk memakai Nama Ayah/Ibu"
                     className="w-full bg-white border border-green-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800"
-                    required={pWaliId === '__buat_baru__'}
                   />
                 </div>
 
@@ -7644,14 +7778,59 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
               </div>
             )}
 
-            <div>
-              <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Alamat Lengkap:</label>
-              <input 
-                type="text"
-                value={pAlamat}
-                onChange={(e) => setPAlamat(e.target.value)}
-                className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 pt-3">
+              <div className="md:col-span-2">
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Alamat (Kampung/Jalan):</label>
+                <input
+                  type="text"
+                  value={pAlamat}
+                  onChange={(e) => setPAlamat(e.target.value)}
+                  className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Desa/Kelurahan:</label>
+                <input type="text" value={pDesaKelurahan} onChange={(e) => setPDesaKelurahan(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Kecamatan:</label>
+                <input type="text" value={pKecamatan} onChange={(e) => setPKecamatan(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Kabupaten/Kota:</label>
+                <input type="text" value={pKabupatenKota} onChange={(e) => setPKabupatenKota(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Provinsi:</label>
+                <input type="text" value={pProvinsi} onChange={(e) => setPProvinsi(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">NIK:</label>
+                <input type="text" value={pNik} onChange={(e) => setPNik(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-bold font-mono" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">KK:</label>
+                <input type="text" value={pKk} onChange={(e) => setPKk(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-bold font-mono" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Nama Ayah:</label>
+                <input type="text" value={pNamaAyah} onChange={(e) => setPNamaAyah(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Nama Ibu:</label>
+                <input type="text" value={pNamaIbu} onChange={(e) => setPNamaIbu(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Pekerjaan Ayah:</label>
+                <input type="text" value={pPekerjaanAyah} onChange={(e) => setPPekerjaanAyah(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Pekerjaan Ibu:</label>
+                <input type="text" value={pPekerjaanIbu} onChange={(e) => setPPekerjaanIbu(e.target.value)} className="w-full bg-slate-50 border border-gray-202 rounded-xl px-3 py-1.5 text-xs font-semibold" />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3">

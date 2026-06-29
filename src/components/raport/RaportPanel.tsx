@@ -322,7 +322,7 @@ export function RaportPanel({ mode }: RaportPanelProps) {
     });
   };
 
-  const removeById = <T extends { id: string },>(rows: T[], id: string) => rows.filter(item => item.id !== id);
+  const removeById = <T extends { id: string },>(rows: T[], id: string): T[] => rows.filter(item => item.id !== id);
 
   const controlBar = !isWali && (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -357,7 +357,7 @@ export function RaportPanel({ mode }: RaportPanelProps) {
               <p className="font-black text-slate-800">{kelas.nama_kelas}</p>
               <p className="text-xs text-slate-400">{kelas.tahun_ajaran} - Wali: {profilesList.find(p => p.id === kelas.wali_kelas_id)?.full_name || '-'}</p>
             </div>
-            <button onClick={() => { const next = removeById(kelasList, kelas.id); dbLocal.setRaportKelas(next); setKelasList(next); }} className="p-2 bg-red-50 text-red-600 rounded-xl"><Trash2 className="w-4 h-4" /></button>
+            <button onClick={() => { const next = removeById<KelasRaport>(kelasList, kelas.id); dbLocal.setRaportKelas(next); setKelasList(next); }} className="p-2 bg-red-50 text-red-600 rounded-xl"><Trash2 className="w-4 h-4" /></button>
           </div>
         ))}
       </div>
@@ -382,7 +382,7 @@ export function RaportPanel({ mode }: RaportPanelProps) {
               <p className="font-black text-slate-800">{mapel.nama_pelajaran}</p>
               <p className="text-xs text-slate-400 capitalize">{mapel.kategori}</p>
             </div>
-            <button onClick={() => { const next = removeById(mapelList, mapel.id); dbLocal.setMataPelajaran(next); setMapelList(next); }} className="p-2 bg-red-50 text-red-600 rounded-xl"><Trash2 className="w-4 h-4" /></button>
+            <button onClick={() => { const next = removeById<MataPelajaran>(mapelList, mapel.id); dbLocal.setMataPelajaran(next); setMapelList(next); }} className="p-2 bg-red-50 text-red-600 rounded-xl"><Trash2 className="w-4 h-4" /></button>
           </div>
         ))}
       </div>
@@ -429,7 +429,7 @@ export function RaportPanel({ mode }: RaportPanelProps) {
             {classMapelsAll.map(km => (
               <div key={km.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2 text-xs">
                 <span className="font-bold text-slate-700">{mapelList.find(m => m.id === km.mapel_id)?.nama_pelajaran} - {profilesList.find(p => p.id === km.guru_id)?.full_name || 'Belum ada guru'}</span>
-                <button onClick={() => { const next = removeById(kelasMapelList, km.id); dbLocal.setKelasMapel(next); setKelasMapelList(next); }} className="text-red-600 font-black">Hapus</button>
+                <button onClick={() => { const next = removeById<KelasMapel>(kelasMapelList, km.id); dbLocal.setKelasMapel(next); setKelasMapelList(next); }} className="text-red-600 font-black">Hapus</button>
               </div>
             ))}
           </div>
@@ -553,11 +553,11 @@ export function RaportPanel({ mode }: RaportPanelProps) {
   };
 
   const tabs: Array<{ id: RaportSubTab; label: string; icon: any }> = isWali
-    ? [{ id: 'wali', label: 'Raport Santri', icon: FileText }]
+    ? [{ id: 'wali' as RaportSubTab, label: 'Raport Santri', icon: FileText }]
     : [
-        ...(isAdmin ? [{ id: 'kelas', label: 'Kelas', icon: GraduationCap }, { id: 'mapel', label: 'Mapel', icon: BookOpen }, { id: 'setup', label: 'Setup Kelas', icon: Users }] : []),
-        { id: 'nilai', label: 'Input Nilai', icon: Save },
-        { id: 'finalisasi', label: 'Finalisasi', icon: CheckCircle2 }
+        ...(isAdmin ? [{ id: 'kelas' as RaportSubTab, label: 'Kelas', icon: GraduationCap }, { id: 'mapel' as RaportSubTab, label: 'Mapel', icon: BookOpen }, { id: 'setup' as RaportSubTab, label: 'Setup Kelas', icon: Users }] : []),
+        { id: 'nilai' as RaportSubTab, label: 'Input Nilai', icon: Save },
+        { id: 'finalisasi' as RaportSubTab, label: 'Finalisasi', icon: CheckCircle2 }
       ];
 
   return (

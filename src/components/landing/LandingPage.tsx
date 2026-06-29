@@ -4,7 +4,7 @@ import {
   MapPin, Phone, Mail, LogIn, ChevronRight, GraduationCap, 
   User, ShieldAlert, CreditCard, ShieldCheck, Newspaper,
   ChevronDown, ArrowRight, Star, Activity, Check, Calendar,
-  TrendingUp, ArrowUpRight, ArrowDownRight, Menu, X, Share2, Copy
+  TrendingUp, ArrowUpRight, ArrowDownRight, Menu, X, Share2, Copy, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
@@ -12,6 +12,7 @@ import { Footer } from '../layout/Footer';
 import { db, dbLocal } from '../../lib/supabase';
 import { ProfilPesantren, PSB, PSBPendaftar } from '../../types';
 import { MATHLABUL_HIDAYAH_LOGO_URL } from '../../lib/branding';
+import { ImageUploader } from '../shared/ImageUploader';
 
 interface LandingPageProps {
   beritaList: any[];
@@ -122,12 +123,24 @@ export function LandingPage({
   const [psbProgram, setPsbProgram] = useState('Reguler');
   const [psbAsalSekolah, setPsbAsalSekolah] = useState('');
   const [psbAlamat, setPsbAlamat] = useState('');
+  const [psbDesaKelurahan, setPsbDesaKelurahan] = useState('');
+  const [psbKecamatan, setPsbKecamatan] = useState('');
+  const [psbKabupatenKota, setPsbKabupatenKota] = useState('');
+  const [psbProvinsi, setPsbProvinsi] = useState('');
+  const [psbBulanMasuk, setPsbBulanMasuk] = useState('Juli');
+  const [psbTahunMasuk, setPsbTahunMasuk] = useState(String(new Date().getFullYear()));
+  const [psbNik, setPsbNik] = useState('');
+  const [psbKk, setPsbKk] = useState('');
   const [psbAyah, setPsbAyah] = useState('');
   const [psbIbu, setPsbIbu] = useState('');
+  const [psbPekerjaanAyah, setPsbPekerjaanAyah] = useState('');
+  const [psbPekerjaanIbu, setPsbPekerjaanIbu] = useState('');
   const [psbWali, setPsbWali] = useState('');
   const [psbPekerjaanWali, setPsbPekerjaanWali] = useState('');
   const [psbPhone, setPsbPhone] = useState('');
   const [psbEmail, setPsbEmail] = useState('');
+  const [psbKtpOrtuUrl, setPsbKtpOrtuUrl] = useState('');
+  const [psbKkUrl, setPsbKkUrl] = useState('');
   const [psbCatatan, setPsbCatatan] = useState('');
   const [psbSuccess, setPsbSuccess] = useState(false);
   const [psbSubmitting, setPsbSubmitting] = useState(false);
@@ -171,12 +184,24 @@ export function LandingPage({
     setPsbProgram('Reguler');
     setPsbAsalSekolah('');
     setPsbAlamat('');
+    setPsbDesaKelurahan('');
+    setPsbKecamatan('');
+    setPsbKabupatenKota('');
+    setPsbProvinsi('');
+    setPsbBulanMasuk('Juli');
+    setPsbTahunMasuk(String(new Date().getFullYear()));
+    setPsbNik('');
+    setPsbKk('');
     setPsbAyah('');
     setPsbIbu('');
+    setPsbPekerjaanAyah('');
+    setPsbPekerjaanIbu('');
     setPsbWali('');
     setPsbPekerjaanWali('');
     setPsbPhone('');
     setPsbEmail('');
+    setPsbKtpOrtuUrl('');
+    setPsbKkUrl('');
     setPsbCatatan('');
   };
 
@@ -229,12 +254,14 @@ export function LandingPage({
 
     const rows = [
       ['Nama Lengkap', data.nama_lengkap],
-      ['NISN', data.nisn || '-'],
+      ['NIS', data.nis || 'Ditentukan admin saat verifikasi'],
+      ['NIK / KK', `${data.nik || '-'} / ${data.kk || '-'}`],
       ['Jenis Kelamin', data.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'],
       ['Tempat/Tanggal Lahir', `${data.tempat_lahir || '-'} / ${data.tanggal_lahir || '-'}`],
       ['Jenjang', data.jenjang],
-      ['Program Pilihan', data.program_pilihan || '-'],
-      ['Asal Sekolah', data.asal_sekolah || '-'],
+      ['Masuk Pondok', `${data.bulan_masuk || '-'} ${data.tahun_masuk || '-'}`],
+      ['Alamat', [data.alamat, data.desa_kelurahan, data.kecamatan, data.kabupaten_kota, data.provinsi].filter(Boolean).join(', ') || '-'],
+      ['Nama Ayah/Ibu', `${data.nama_ayah || '-'} / ${data.nama_ibu || '-'}`],
       ['Nama Wali', data.nama_wali],
       ['WhatsApp Wali', data.no_whatsapp],
       ['Tanggal Daftar', data.created_at ? new Date(data.created_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')]
@@ -262,10 +289,11 @@ export function LandingPage({
 
   const handlePsbSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isPsbOpen || !psbNama || !psbWali || !psbPhone) return;
+    if (!isPsbOpen || !psbNama || !psbPhone) return;
     setPsbSubmitting(true);
     try {
       const nomor = `PSB-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      const waliName = psbWali || psbAyah || psbIbu || `Wali ${psbNama}`;
       const saved = await dbLocal.insertPSBPendaftar({
         nomor_pendaftaran: nomor,
         nama_lengkap: psbNama,
@@ -277,12 +305,24 @@ export function LandingPage({
         program_pilihan: psbProgram,
         asal_sekolah: psbAsalSekolah,
         alamat: psbAlamat,
+        desa_kelurahan: psbDesaKelurahan,
+        kecamatan: psbKecamatan,
+        kabupaten_kota: psbKabupatenKota,
+        provinsi: psbProvinsi,
+        bulan_masuk: psbBulanMasuk,
+        tahun_masuk: psbTahunMasuk,
+        nik: psbNik,
+        kk: psbKk,
         nama_ayah: psbAyah,
         nama_ibu: psbIbu,
-        nama_wali: psbWali,
+        pekerjaan_ayah: psbPekerjaanAyah,
+        pekerjaan_ibu: psbPekerjaanIbu,
+        nama_wali: waliName,
         pekerjaan_wali: psbPekerjaanWali,
         no_whatsapp: psbPhone,
         email: psbEmail,
+        ktp_ortu_url: psbKtpOrtuUrl,
+        kk_url: psbKkUrl,
         catatan: psbCatatan,
         status: 'baru'
       });
@@ -1243,9 +1283,9 @@ export function LandingPage({
             </div>
           ) : (
             <form onSubmit={handlePsbSubmit} className="space-y-5 text-xs text-left">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Lengkap Calon Santri:</label><input type="text" value={psbNama} onChange={(e) => setPsbNama(e.target.value)} placeholder="cth: Ahmad Fauzi Syafii" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required /></div>
-                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">NISN:</label><input type="text" value={psbNisn} onChange={(e) => setPsbNisn(e.target.value)} placeholder="cth: 3012903822" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Lengkap Calon Santri:</label>
+                <input type="text" value={psbNama} onChange={(e) => setPsbNama(e.target.value)} placeholder="cth: Ahmad Fauzi Syafii" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Jenis Kelamin:</label><select value={psbJk} onChange={(e) => setPsbJk(e.target.value as 'L' | 'P')} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white outline-none"><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></div>
@@ -1253,21 +1293,48 @@ export function LandingPage({
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Tanggal Lahir:</label><input type="date" value={psbTanggalLahir} onChange={(e) => setPsbTanggalLahir(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Jenjang Dituju:</label><select value={psbKelas} onChange={(e) => setPsbKelas(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white outline-none"><option>MTs Kelas VII</option><option>MTs Pindahan</option><option>MA Kelas X</option><option>MA Pindahan</option></select></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Kelas:</label><input type="text" value={psbKelas} onChange={(e) => setPsbKelas(e.target.value)} placeholder="cth: MTs Kelas VII" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Program Pilihan:</label><select value={psbProgram} onChange={(e) => setPsbProgram(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white outline-none"><option>Reguler</option><option>Tahfidz</option><option>Kitab Kuning</option><option>Bilingual</option></select></div>
-                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Asal Sekolah:</label><input type="text" value={psbAsalSekolah} onChange={(e) => setPsbAsalSekolah(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Asal Sekolah (Opsional):</label><input type="text" value={psbAsalSekolah} onChange={(e) => setPsbAsalSekolah(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
               </div>
-              <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Alamat Lengkap:</label><textarea rows={3} value={psbAlamat} onChange={(e) => setPsbAlamat(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Alamat (Kampung/Jalan):</label><textarea rows={2} value={psbAlamat} onChange={(e) => setPsbAlamat(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Desa/Kelurahan:</label><input type="text" value={psbDesaKelurahan} onChange={(e) => setPsbDesaKelurahan(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Kecamatan:</label><input type="text" value={psbKecamatan} onChange={(e) => setPsbKecamatan(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Kabupaten/Kota:</label><input type="text" value={psbKabupatenKota} onChange={(e) => setPsbKabupatenKota(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Provinsi:</label><input type="text" value={psbProvinsi} onChange={(e) => setPsbProvinsi(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Bulan Masuk:</label><select value={psbBulanMasuk} onChange={(e) => setPsbBulanMasuk(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-bold focus:bg-white outline-none">{['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Tahun Masuk:</label><input type="number" value={psbTahunMasuk} onChange={(e) => setPsbTahunMasuk(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">NIK:</label><input type="text" value={psbNik} onChange={(e) => setPsbNik(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">KK:</label><input type="text" value={psbKk} onChange={(e) => setPsbKk(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Ayah:</label><input type="text" value={psbAyah} onChange={(e) => setPsbAyah(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Ibu:</label><input type="text" value={psbIbu} onChange={(e) => setPsbIbu(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
-                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Wali Utama:</label><input type="text" value={psbWali} onChange={(e) => setPsbWali(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Nama Wali Utama (Opsional):</label><input type="text" value={psbWali} onChange={(e) => setPsbWali(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Pekerjaan Ayah:</label><input type="text" value={psbPekerjaanAyah} onChange={(e) => setPsbPekerjaanAyah(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Pekerjaan Ibu:</label><input type="text" value={psbPekerjaanIbu} onChange={(e) => setPsbPekerjaanIbu(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">No HP Wali (Login):</label><input type="text" value={psbPhone} onChange={(e) => setPsbPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required /></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Email Wali (Opsional):</label><input type="email" value={psbEmail} onChange={(e) => setPsbEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+                <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">NISN (Opsional):</label><input type="text" value={psbNisn} onChange={(e) => setPsbNisn(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ImageUploader label="Upload KTP Ortu" currentImageUrl={psbKtpOrtuUrl} onUploadSuccess={(url) => setPsbKtpOrtuUrl(url)} onClear={() => setPsbKtpOrtuUrl('')} maxSizeMB={8} />
+                <ImageUploader label="Upload KK" currentImageUrl={psbKkUrl} onUploadSuccess={(url) => setPsbKkUrl(url)} onClear={() => setPsbKkUrl('')} maxSizeMB={8} />
+              </div>
+              {false && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Pekerjaan Wali:</label><input type="text" value={psbPekerjaanWali} onChange={(e) => setPsbPekerjaanWali(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">No WhatsApp Wali:</label><input type="text" value={psbPhone} onChange={(e) => setPsbPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-mono font-bold focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" required /></div>
                 <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Email:</label><input type="email" value={psbEmail} onChange={(e) => setPsbEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
               </div>
+              )}
               <div><label className="text-[9px] font-black uppercase text-slate-400 block mb-1">Catatan Tambahan:</label><textarea rows={3} value={psbCatatan} onChange={(e) => setPsbCatatan(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-medium focus:bg-white focus:ring-1 focus:ring-green-500 outline-none" /></div>
               <p className="text-[10px] text-slate-400 leading-normal bg-slate-50 p-3 rounded-xl border border-slate-150">Dengan menekan tombol pendaftaran, data calon santri akan terekam dan menunggu verifikasi panitia PSB.</p>
               <button type="submit" disabled={psbSubmitting} className="w-full py-3.5 bg-green-700 hover:bg-green-800 disabled:bg-slate-400 text-white font-extrabold rounded-xl shadow-lg cursor-pointer transition-all active:scale-95 text-xs select-none uppercase tracking-wider">{psbSubmitting ? 'Menyimpan Pendaftaran...' : 'Ajukan Berkas Pendaftaran Santri Baru'}</button>

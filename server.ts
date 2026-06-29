@@ -185,10 +185,10 @@ app.post('/api/admin/wali/create-with-santri-auth', async (req, res) => {
         const { supabaseAdmin } = await verifyAdminRequest(req);
         const { wali, santri } = req.body || {};
 
-        if (!wali?.full_name || !wali?.email || !wali?.password) {
+        if (!wali?.full_name || !wali?.password) {
             return res
                 .status(400)
-                .json({ error: 'Nama, email, dan password wali wajib diisi.' });
+                .json({ error: 'Nama dan password wali wajib diisi.' });
         }
 
         if (
@@ -204,7 +204,8 @@ app.post('/api/admin/wali/create-with-santri-auth', async (req, res) => {
                 .json({ error: 'Data santri belum lengkap.' });
         }
 
-        const normalizedEmail = String(wali.email).trim().toLowerCase();
+        const normalizedPhone = String(wali.phone || '').replace(/[^\d]/g, '') || String(Date.now());
+        const normalizedEmail = String(wali.email || `${normalizedPhone}@wali.local`).trim().toLowerCase();
 
         console.log(`[Admin Wali Create] create user auth: ${normalizedEmail}`);
         const { data: authData, error: authError } =
@@ -290,6 +291,16 @@ app.post('/api/admin/wali/create-with-santri-auth', async (req, res) => {
                 jenis_kelamin: santri.jenis_kelamin,
                 tanggal_lahir: santri.tanggal_lahir,
                 alamat: santri.alamat || null,
+                desa_kelurahan: santri.desa_kelurahan || null,
+                kecamatan: santri.kecamatan || null,
+                kabupaten_kota: santri.kabupaten_kota || null,
+                provinsi: santri.provinsi || null,
+                nik: santri.nik || null,
+                kk: santri.kk || null,
+                nama_ayah: santri.nama_ayah || null,
+                nama_ibu: santri.nama_ibu || null,
+                pekerjaan_ayah: santri.pekerjaan_ayah || null,
+                pekerjaan_ibu: santri.pekerjaan_ibu || null,
                 wali_id: profile.id,
                 foto_url: santri.foto_url || null,
                 status: santri.status || 'aktif',
