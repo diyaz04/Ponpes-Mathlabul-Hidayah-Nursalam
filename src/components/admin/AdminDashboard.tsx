@@ -1793,15 +1793,33 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
     const data = [headers, sample1, sample2];
 
     const ws = utils.aoa_to_sheet(data);
+    ws['!cols'] = headers.map((header) => ({
+      wch: Math.max(16, Math.min(28, header.length + 4))
+    }));
+
+    const guideRows = [
+      ['Template Import Santri & Wali - Format Lengkap'],
+      ['Wajib diisi', 'NIS, Nama Santri, Kelas, Jenis Kelamin, Tanggal Lahir, Bulan Masuk, Tahun Masuk, No HP Wali, Password Wali'],
+      ['Opsional', 'Kamar, alamat rinci, NIK, KK, data ayah/ibu, Email Wali'],
+      ['Jenis Kelamin', 'Isi L untuk Laki-laki atau P untuk Perempuan'],
+      ['Tanggal Lahir', 'Gunakan format YYYY-MM-DD, contoh 2011-05-15'],
+      [],
+      ['Urutan Kolom'],
+      ...headers.map((header, index) => [index + 1, header])
+    ];
+    const guideWs = utils.aoa_to_sheet(guideRows);
+    guideWs['!cols'] = [{ wch: 18 }, { wch: 80 }];
+
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, 'Template Santri Wali');
+    utils.book_append_sheet(wb, ws, 'Template Lengkap');
+    utils.book_append_sheet(wb, guideWs, 'Panduan');
 
     const wbout = write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "template_import_santri_wali.xlsx");
+    link.setAttribute("download", "template_import_santri_wali_lengkap_v2.xlsx");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -3795,7 +3813,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   onClick={handleDownloadTemplate}
                   className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-800 rounded-lg text-[10px] font-extrabold border border-green-200 cursor-pointer transition-all active:scale-95 inline-flex items-center gap-1"
                 >
-                  📄 Unduh Template Excel (.xlsx)
+                  Unduh Template Lengkap v2 (.xlsx)
                 </button>
               </div>
 
@@ -3811,7 +3829,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                   <div className="space-y-2 pointer-events-none">
                     <span className="text-2xl block">📁</span>
                     <span className="text-[10px] font-bold text-slate-700 block text-ellipsis overflow-hidden max-w-[200px]">
-                      {importSelectedFileName ? `Terpilih: ${importSelectedFileName}` : 'Pilih Berkas Excel Template (.xlsx)'}
+                      {importSelectedFileName ? `Terpilih: ${importSelectedFileName}` : 'Pilih Berkas Excel Template Lengkap (.xlsx)'}
                     </span>
                     <span className="text-[9px] text-slate-400 block">Klik atau Seret Berkas ke Sini</span>
                   </div>
@@ -3821,8 +3839,9 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 <div className="md:col-span-2 bg-white rounded-2xl p-5 border border-slate-150 text-xs text-slate-600 leading-relaxed font-sans space-y-2.5">
                   <span className="font-extrabold text-[10px] text-slate-800 uppercase tracking-wider block">Panduan Penggunaan Template:</span>
                   <ul className="list-disc pl-4 space-y-1 text-[10.5px]">
-                    <li>Unduh template menggunakan tombol <strong className="text-green-850 font-extrabold">Unduh Template Excel</strong> di atas.</li>
-                    <li>Isian kolom <strong className="text-slate-850 font-bold">NIS, Nama Santri, Kelas, dan No HP Wali</strong> wajib diisi. Nama akun wali otomatis memakai Nama Ayah/Ibu bila kolom Nama Wali tidak tersedia.</li>
+                    <li>Unduh template baru menggunakan tombol <strong className="text-green-850 font-extrabold">Unduh Template Lengkap v2</strong> di atas. Nama file: <code className="bg-slate-100 px-1 py-0.5 font-mono text-[9.5px]">template_import_santri_wali_lengkap_v2.xlsx</code>.</li>
+                    <li>Template lengkap berisi kolom <strong className="text-slate-850 font-bold">NIS, Nama Santri, Kelas, Kamar, Jenis Kelamin, Tanggal Lahir, Alamat, Desa/Kelurahan, Kecamatan, Kabupaten/Kota, Provinsi, Bulan/Tahun Masuk, NIK, KK, Ayah/Ibu, Pekerjaan, No HP, Email, dan Password Wali</strong>.</li>
+                    <li>Isian kolom <strong className="text-slate-850 font-bold">NIS, Nama Santri, Kelas, Jenis Kelamin, Tanggal Lahir, Bulan Masuk, Tahun Masuk, No HP Wali, dan Password Wali</strong> wajib diisi.</li>
                     <li>Sistem akan mendeteksi apabila <strong className="text-slate-855 font-bold">No HP Wali</strong> sudah pernah terdaftar, lalu otomatis mengaitkan santri tersebut tanpa menduplikasi berkas akun wali (berguna untuk saudara sekandung).</li>
                     <li>Kolom <strong className="text-slate-850 font-bold">Jenis Kelamin</strong> diisi <code className="bg-slate-100 px-1 py-0.5 font-mono text-[9.5px]">L</code> untuk Laki-laki & <code className="bg-slate-100 px-1 py-0.5 font-mono text-[9.5px]">P</code> untuk Perempuan.</li>
                   </ul>
