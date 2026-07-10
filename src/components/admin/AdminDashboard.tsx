@@ -2402,7 +2402,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   };
 
   const handleDeleteAllFinancialData = () => {
-    const typedConfirmation = deleteFinanceConfirmation.trim();
+    const typedConfirmation = deleteFinanceConfirmation;
     if (typedConfirmation !== FINANCIAL_DELETE_CONFIRMATION_TEXT) {
       setActionDoneMsg(`Ketik persis "${FINANCIAL_DELETE_CONFIRMATION_TEXT}" untuk menghapus semua data keuangan.`);
       setTimeout(() => setActionDoneMsg(null), 5000);
@@ -2419,13 +2419,13 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
             const { error: paymentDeleteError } = await supabase
               .from('pembayaran')
               .delete()
-              .gte('created_at', '1900-01-01T00:00:00.000Z');
+              .not('id', 'is', null);
             if (paymentDeleteError) throw paymentDeleteError;
 
             const { error: billDeleteError } = await supabase
               .from('tagihan')
               .delete()
-              .gte('created_at', '1900-01-01T00:00:00.000Z');
+              .not('id', 'is', null);
             if (billDeleteError) throw billDeleteError;
 
             const { error: notificationDeleteError } = await supabase
@@ -5750,7 +5750,7 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                 <button
                   type="button"
                   onClick={handleDeleteAllFinancialData}
-                  disabled={deleteFinanceConfirmation.trim() !== FINANCIAL_DELETE_CONFIRMATION_TEXT || isDeletingFinancialData}
+                  disabled={deleteFinanceConfirmation !== FINANCIAL_DELETE_CONFIRMATION_TEXT || isDeletingFinancialData}
                   className="w-full lg:w-auto px-4 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 disabled:bg-red-200 disabled:text-red-400 disabled:cursor-not-allowed text-white text-xs font-black cursor-pointer shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                   {isDeletingFinancialData ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
