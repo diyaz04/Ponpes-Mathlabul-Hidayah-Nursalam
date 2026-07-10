@@ -73,6 +73,8 @@ const DEFAULT_SECTION_TITLES_JSON = JSON.stringify({
   faq: { eyebrow: 'Informasi Umum', title: 'Pertanyaan Yang Sering Diajukan (FAQ)', desc: 'Pertanyaan utama orang tua wali saat mendaftarkan putra-putrinya.' }
 }, null, 2);
 
+const FINANCIAL_DELETE_CONFIRMATION_TEXT = 'hapus semua data keuangan sekarang';
+
 const CMS_ROUTINE_TABS = [
   { id: 'shubuh', label: 'Subuh' },
   { id: 'madrasah', label: 'Madrasah' },
@@ -322,6 +324,8 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
   const [cfgTagihanStatusFilter, setCfgTagihanStatusFilter] = useState<'semua' | 'pending' | 'lunas'>('pending');
   const [cfgTagihanJenisFilter, setCfgTagihanJenisFilter] = useState('semua');
   const [billingSubTab, setBillingSubTab] = useState<'metode' | 'atur' | 'generate' | 'monitoring' | 'verifikasi'>('metode');
+  const [deleteFinanceConfirmation, setDeleteFinanceConfirmation] = useState('');
+  const [isDeletingFinancialData, setIsDeletingFinancialData] = useState(false);
   const [paymentModeForm, setPaymentModeForm] = useState<PaymentConfig['metode_aktif']>('midtrans');
   const [paymentBankName, setPaymentBankName] = useState(DEFAULT_PAYMENT_CONFIG.bank_name || '');
   const [paymentAccountNumber, setPaymentAccountNumber] = useState('');
@@ -2393,6 +2397,65 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
           setActionDoneMsg(`❌ Gagal: ${err.message || err}`);
         }
         setTimeout(() => setActionDoneMsg(null), 4000);
+      }
+    );
+  };
+
+  const handleDeleteAllFinancialData = () => {
+    const typedConfirmation = deleteFinanceConfirmation.trim();
+    if (typedConfirmation !== FINANCIAL_DELETE_CONFIRMATION_TEXT) {
+      setActionDoneMsg(`Ketik persis "${FINANCIAL_DELETE_CONFIRMATION_TEXT}" untuk menghapus semua data keuangan.`);
+      setTimeout(() => setActionDoneMsg(null), 5000);
+      return;
+    }
+
+    triggerConfirm(
+      'Hapus Semua Data Keuangan',
+      `Tindakan ini akan menghapus permanen seluruh ${bills.length} tagihan/invoice yang pernah digenerate dan ${payments.length} catatan pembayaran/keuangan yang pernah dicatat. Kategori iuran dan konfigurasi metode pembayaran tetap disimpan. Lanjutkan?`,
+      async () => {
+        setIsDeletingFinancialData(true);
+        try {
+          if (isRealSupabaseConfigured && supabase) {
+            const { error: paymentDeleteError } = await supabase
+              .from('pembayaran')
+              .delete()
+              .gte('created_at', '1900-01-01T00:00:00.000Z');
+            if (paymentDeleteError) throw paymentDeleteError;
+
+            const { error: billDeleteError } = await supabase
+              .from('tagihan')
+              .delete()
+              .gte('created_at', '1900-01-01T00:00:00.000Z');
+            if (billDeleteError) throw billDeleteError;
+
+            const { error: notificationDeleteError } = await supabase
+              .from('notifikasi')
+              .delete()
+              .in('tipe', ['tagihan', 'pembayaran']);
+            if (notificationDeleteError) {
+              console.warn('[Supabase financial notification cleanup failure]', notificationDeleteError);
+            }
+
+            await refreshAdminData();
+          } else {
+            setBills([]);
+            setPayments([]);
+          }
+
+          setBills([]);
+          setPayments([]);
+          setDeleteFinanceConfirmation('');
+          setCfgTagihanSearch('');
+          setCfgTagihanStatusFilter('semua');
+          setCfgTagihanJenisFilter('semua');
+          setCfgPaymentSearch('');
+          setActionDoneMsg('Semua data keuangan berhasil dihapus: tagihan, catatan pembayaran, dan notifikasi terkait sudah dibersihkan.');
+        } catch (err: any) {
+          setActionDoneMsg(`Gagal menghapus semua data keuangan: ${err.message || err}`);
+        } finally {
+          setIsDeletingFinancialData(false);
+          setTimeout(() => setActionDoneMsg(null), 6000);
+        }
       }
     );
   };
@@ -5646,6 +5709,53 @@ export function AdminDashboard({ activeTab: externalActiveTab, onTabChange: exte
                     Tarik Tagihan
                   </button>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-red-50/80 border border-red-200 p-4 rounded-2xl text-left space-y-3">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                <div className="flex gap-3">
+                  <span className="w-10 h-10 rounded-xl bg-white border border-red-100 text-red-700 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h5 className="text-xs font-black uppercase tracking-wider text-red-800">Hapus Semua Data Keuangan</h5>
+                    <p className="text-[11px] text-red-700 font-semibold leading-relaxed mt-1 max-w-3xl">
+                      Menghapus seluruh tagihan yang pernah digenerate, semua catatan pembayaran/cicilan/cash/manual, dan notifikasi tagihan/pembayaran terkait. Kategori iuran dan konfigurasi metode pembayaran tidak ikut dihapus.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-red-100 text-red-700">{bills.length} tagihan</span>
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-red-100 text-red-700">{payments.length} catatan pembayaran</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-2 items-center">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-red-700 block mb-1">
+                    Ketik: {FINANCIAL_DELETE_CONFIRMATION_TEXT}
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteFinanceConfirmation}
+                    onChange={(e) => setDeleteFinanceConfirmation(e.target.value)}
+                    autoCapitalize="none"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder={FINANCIAL_DELETE_CONFIRMATION_TEXT}
+                    className="w-full bg-white border border-red-200 rounded-xl px-3 py-2 text-xs font-bold text-red-900 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeleteAllFinancialData}
+                  disabled={deleteFinanceConfirmation.trim() !== FINANCIAL_DELETE_CONFIRMATION_TEXT || isDeletingFinancialData}
+                  className="w-full lg:w-auto px-4 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 disabled:bg-red-200 disabled:text-red-400 disabled:cursor-not-allowed text-white text-xs font-black cursor-pointer shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {isDeletingFinancialData ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {isDeletingFinancialData ? 'Menghapus...' : 'Hapus Semua Data Keuangan'}
+                </button>
               </div>
             </div>
 
